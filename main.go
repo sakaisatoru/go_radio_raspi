@@ -12,6 +12,8 @@ import (
 	"github.com/mattn/go-tty"
 	"golang.org/x/text/transform"
 	"golang.org/x/text/encoding/japanese"
+	"github.com/davecheney/i2c"
+	"local.packages/aqm1602y"
 )
 
 const (
@@ -93,6 +95,16 @@ func beep() {
 
 
 func main() {
+	// OLED or LCD
+	i2c, err := i2c.New(0x3c, 1)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer i2c.Close()
+	oled := aqm1602y.New(i2c)
+	oled.Configure()
+	oled.PrintWithPos(0, 0, []byte("test"))
+
 	tty, err := tty.Open();
 	if err != nil {
 		log.Fatal(err)
@@ -122,8 +134,10 @@ func main() {
 		}
 	}
 	
+	
+	
 	pos := 0
-	volume := 10
+	volume := 30
 	mpv_setvol (volume)
 	
 	for {
@@ -132,6 +146,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		oled.PrintWithPos(0, 0, []byte(stlist[pos].name))
 		fmt.Printf("\r                                                  \r%s %d",stmp, n)
 		//~ fmt.Printf("\r                                              \r%s",stlist[pos].name)
 		r, err := tty.ReadRune()
@@ -147,6 +162,9 @@ func main() {
 					}
 				}
 				mpv_setvol (volume)
+				stmp := fmt.Sprintf("vol : %d", volume)
+				oled.Clear()
+				oled.PrintWithPos(0, 1, []byte(stmp))
 				continue
 			case "z":
 				if volume > 0 {
@@ -156,17 +174,23 @@ func main() {
 					}
 				}
 				mpv_setvol (volume)
+				stmp := fmt.Sprintf("vol : %d", volume)
+				oled.Clear()
+				oled.PrintWithPos(0, 1, []byte(stmp))
 				continue
 			case "s":
+				oled.Clear()
 				mpv_send("{\"command\": [\"stop\"]}\x0a")
 				continue
 			case "n":
 				if pos < stlen -1 {
+					oled.Clear()
 					pos++
 				}
 				continue
 			case "b":
 				if pos > 0 {
+					oled.Clear()
 					pos--
 				}
 				continue
@@ -196,4 +220,5 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	oled.DisplayOff()
 }
