@@ -33,12 +33,15 @@ const (
 	btn_station_next 
 	btn_station_prior
 	btn_station_select
+	btn_station_re_forward
+	btn_station_re_backward
 	btn_station_repeat_end
 	
 	btn_station_repeat = 0x80
 	
 	btn_press_width int = 10
 	btn_press_long_width int = 80
+	
 )
 
 type StationInfo struct {
@@ -56,6 +59,9 @@ var (
 	pos int
 	readbuf = make([]byte,1024)
 	mpvprocess *exec.Cmd
+	volume int
+	re_table = []int8{0,1,-1,0,-1,0,0,1,1,0,0,-1,0,-1,1,0}
+	re_count int = 0
 )
 
 
@@ -135,21 +141,39 @@ func btninput(code chan<- ButtonCode) {
 		log.Fatal(err)
 	}
 	defer rpio.Close()
-	btnscan := []rpio.Pin{26, 5, 6}
+	btnscan := []rpio.Pin{26, 5, 6, 17, 27}
 	for _, sn := range(btnscan) {
-		rpio.Pin(sn).Input()
-		rpio.Pin(sn).PullUp()
+		sn.Input()
+		sn.PullUp()
 	}
-
 	hold := 0
 	btn_h := btn_station_none
+	var m3 sync.Mutex
 	
 	for {
 		time.Sleep(10*time.Millisecond)
+		// ロータリーエンコーダ
+		retmp := (uint8(btnscan[3].Read())<<1) | uint8(btnscan[4].Read())
+		re_count = (re_count << 2) + int(retmp)
+		n := re_table[re_count & 15]
+		if n != 0 {
+			volume += int(n)
+			if volume > 100 {
+				volume = 100
+			} else if volume < 0 {
+				volume = 0
+			}
+			//~ fmt.Printf("volume : %d\n", volume)
+			m3.Lock()
+			linebuf2 = fmt.Sprintf("volume : %d",
+											mpv_setvol (volume))
+			m3.Unlock()
+		}
+
 		switch btn_h {
 			case 0:
-				// 押されているボタンがあれば、そのコードを保存する
-				for i, sn := range(btnscan) {
+				for i, sn := range(btnscan[:3]) {
+					// 押されているボタンがあれば、そのコードを保存する
 					if rpio.ReadPin(sn) == rpio.Low {
 						btn_h = ButtonCode(i+1)
 						hold = 0
@@ -160,7 +184,7 @@ func btninput(code chan<- ButtonCode) {
 			// もし過去になにか押されていたら、現在それがどうなっているか
 			// 調べる
 			default:
-				for i, sn := range(btnscan) {
+				for i, sn := range(btnscan[:3]) {
 					if btn_h == ButtonCode(i+1) {
 						if rpio.ReadPin(sn) == rpio.Low {
 							// 引き続き押されている
@@ -195,7 +219,7 @@ func tune() {
 		cmd := exec.Command("/usr/local/share/mpvradio/plugins/"+args[1], args[2])
 		err := cmd.Run()
 		if err != nil {
-			log.Fatal(err)
+			linebuf1 = "Tuning Error"
 		}
 	} else {
 		s := fmt.Sprintf("{\"command\": [\"loadfile\",\"%s\"]}\x0a", stlist[pos].url)
@@ -247,10 +271,10 @@ func main() {
 	linebuf1 = ""
 	linebuf2 = ""
 	pos = 0
-	volume := 50
+	volume = 50
 	mpv_setvol (volume)
 	colon = 0
-	swmode := 1
+	var m2 sync.Mutex
 	btncode := make(chan ButtonCode)
 	go btninput(btncode)
 	
@@ -260,85 +284,40 @@ func main() {
 				colon ^= 1
 			case r := <-btncode:
 				switch r {
-					case (btn_station_select|btn_station_repeat):
+					//~ case (btn_station_select|btn_station_repeat):
+					case (btn_station_select):
 						mpv_send("{\"command\": [\"stop\"]}\x0a")
 						linebuf1 = "stop"
-						swmode = 0
 						
-					case btn_station_select:
-						swmode ^= 1
-						if swmode == 1 {
-							linebuf1 = "station select"
-						} else {
-							linebuf1 = "volume"
-						}
 					case btn_station_repeat_end:
-						if swmode == 1 {
 							linebuf1 = stlist[pos].name
 							tune()
-						} else {
-							linebuf1 = fmt.Sprintf("volume : %d",
-											mpv_setvol (volume))
-						}
 						
 					case (btn_station_next|btn_station_repeat):
-						if swmode == 1 {
 							if pos < stlen -1 {
 								pos++
 								linebuf1 = stlist[pos].name
 							}
-						} else {
-							if volume < 100 {
-								volume++
-								linebuf1 = fmt.Sprintf("volume : %d",
-											mpv_setvol (volume))
-							}
-						}
 						
 					case btn_station_next:
-						if swmode == 1 {
 							if pos < stlen -1 {
 								pos++
 								linebuf1 = stlist[pos].name
 								tune()
 							}
-						} else {
-							if volume < 100 {
-								volume++
-								linebuf1 = fmt.Sprintf("volume : %d",
-												mpv_setvol (volume))
-							}
-						}
 						
 					case (btn_station_prior|btn_station_repeat):
-						if swmode == 1 {
 							if pos > 0 {
 								pos--
 								linebuf1 = stlist[pos].name
 							}
-						} else {
-							if volume > 0 {
-								volume--
-								linebuf1 = fmt.Sprintf("volume : %d",
-											mpv_setvol (volume))
-							}
-						}
-
+						
 					case btn_station_prior:
-						if swmode == 1 {
 							if pos > 0 {
 								pos--
 								linebuf1 = stlist[pos].name
 								tune()
 							}
-						} else {
-							if volume > 0 {
-								volume--
-								linebuf1 = fmt.Sprintf("volume : %d",
-											mpv_setvol (volume))
-							}
-						}
-
 				}
 
 			default:
@@ -347,7 +326,9 @@ func main() {
 				if colon == 1 {
 					cs = ":"
 				}
+				m2.Lock()
 				linebuf2 = fmt.Sprintf("%02d%s%02d", time.Now().Hour(),cs,time.Now().Minute())
+				m2.Unlock()
 				infoupdate()
 		}
 	}
