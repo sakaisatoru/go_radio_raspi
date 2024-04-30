@@ -51,7 +51,5 @@ plugin:/radiko.py/JOAK
 plugin:/radiko.py/RN1
 #EXTINF:-1,Tokyo / ׼޵NIKKEI2
 plugin:/radiko.py/RN2
-#EXTINF:-1,Chiba / HOUSOU-DAIGAKU
-plugin:/radiko.py/HOUSOU-DAIGAKU
 #EXTINF:-1,Tokyo / NHK-FM(Tokyo)
 plugin:/radiko.py/JOAK-FM

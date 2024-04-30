@@ -11,7 +11,7 @@ import (
 	"time"
 	"sync"
 	"math"
-	"github.com/mattn/go-tty"
+	//~ "github.com/mattn/go-tty"
 	"github.com/davecheney/i2c"
 	"github.com/stianeikeland/go-rpio/v4"
 	"local.packages/aqm1602y"
@@ -32,6 +32,7 @@ const (
 	btn_station_none ButtonCode = iota
 	btn_station_next 
 	btn_station_prior
+	btn_station_mode
 	btn_station_select
 	btn_station_re_forward
 	btn_station_re_backward
@@ -39,9 +40,16 @@ const (
 	
 	btn_station_repeat = 0x80
 	
-	btn_press_width int = 10
+	btn_press_width int = 7
 	btn_press_long_width int = 80
 	
+)
+
+const (
+	clock_mode_normal uint8 = iota
+	clock_mode_alarm
+	clock_mode_sleep
+	clock_mode_sleep_alarm
 )
 
 type StationInfo struct {
@@ -52,8 +60,6 @@ type StationInfo struct {
 var (
 	mpv	net.Conn
 	oled aqm1602y.AQM1602Y
-	linebuf1 string
-	linebuf2 string
 	stlist []*StationInfo
 	colon uint8
 	pos int
@@ -62,6 +68,11 @@ var (
 	volume int
 	re_table = []int8{0,1,-1,0,-1,0,0,1,1,0,0,-1,0,-1,1,0}
 	re_count int = 0
+	clock_mode uint8
+	alarm_time time.Time
+	alarm_set_mode bool
+	alarm_set_pos int
+
 )
 
 
@@ -83,7 +94,7 @@ func setup_station_list () {
 				f = false
 				stmp := new(StationInfo)
 				stmp.url = s
-				stmp.name = name
+				stmp.name = string(name+"                ")[:15]
 				stlist = append(stlist, stmp)
 			}
 		}
@@ -112,7 +123,7 @@ func mpv_send(s string) {
 func mpv_setvol(vol int) int {
 	var v int
 	if vol < 1 {
-		v = 0
+		v = 1
 	} else {
 		v = int(math.Log(float64(vol))*(100/4.6)*-1+100)
 	}
@@ -127,54 +138,53 @@ func beep() {
 }
 
 var mu sync.Mutex
-func infoupdate() {
+func infoupdate(line uint8, mes *string) {
 	mu.Lock()
 	defer mu.Unlock()
-	
-	oled.PrintWithPos(0, 0, []byte(string(linebuf1+"                ")[:15]))
-	oled.PrintWithPos(0, 1, []byte(string(linebuf2+"                ")[:15]))
+
+	oled.PrintWithPos(0, line, []byte(string(*mes)))
 }
 
 func btninput(code chan<- ButtonCode) {
 	err := rpio.Open()
 	if err != nil {
+		mes := "rpio not open."
+		infoupdate(0, &mes)
+		mes = "HUP"
+		infoupdate(1, &mes)
 		log.Fatal(err)
 	}
 	defer rpio.Close()
-	btnscan := []rpio.Pin{26, 5, 6, 17, 27}
+	btnscan := []rpio.Pin{26, 5, 22, 6, 17, 27}
 	for _, sn := range(btnscan) {
 		sn.Input()
 		sn.PullUp()
 	}
 	hold := 0
 	btn_h := btn_station_none
-	var m3 sync.Mutex
 	
 	for {
 		time.Sleep(10*time.Millisecond)
 		// ロータリーエンコーダ
-		retmp := (uint8(btnscan[3].Read())<<1) | uint8(btnscan[4].Read())
+		retmp := (uint8(btnscan[4].Read())<<1) | uint8(btnscan[5].Read())
 		re_count = (re_count << 2) + int(retmp)
 		n := re_table[re_count & 15]
 		if n != 0 {
 			volume += int(n)
 			if volume > 100 {
 				volume = 100
-			} else if volume < 0 {
-				volume = 0
+			} else if volume < 1 {
+				volume = 1
 			}
-			//~ fmt.Printf("volume : %d\n", volume)
-			m3.Lock()
-			linebuf2 = fmt.Sprintf("volume : %d",
-											mpv_setvol (volume))
-			m3.Unlock()
+			mpv_setvol (volume)
 		}
 
 		switch btn_h {
 			case 0:
-				for i, sn := range(btnscan[:3]) {
+				for i, sn := range(btnscan[:btn_station_select]) {
 					// 押されているボタンがあれば、そのコードを保存する
-					if rpio.ReadPin(sn) == rpio.Low {
+					//~ if rpio.ReadPin(sn) == rpio.Low {
+					if sn.Read() == rpio.Low {
 						btn_h = ButtonCode(i+1)
 						hold = 0
 						break
@@ -184,9 +194,10 @@ func btninput(code chan<- ButtonCode) {
 			// もし過去になにか押されていたら、現在それがどうなっているか
 			// 調べる
 			default:
-				for i, sn := range(btnscan[:3]) {
+				for i, sn := range(btnscan[:btn_station_select]) {
 					if btn_h == ButtonCode(i+1) {
-						if rpio.ReadPin(sn) == rpio.Low {
+						//~ if rpio.ReadPin(sn) == rpio.Low {
+						if sn.Read() == rpio.Low {
 							// 引き続き押されている
 							hold++
 							if hold > btn_press_long_width {
@@ -197,9 +208,10 @@ func btninput(code chan<- ButtonCode) {
 								code <- (btn_h | btn_station_repeat)
 							}
 						} else {
-							if hold == btn_press_long_width {
+							if hold >= btn_press_long_width {
+								// リピート入力の終わり
 								code <- btn_station_repeat_end
-							} else if hold > btn_press_width && hold < btn_press_long_width {
+							} else if hold > btn_press_width {
 								// ワンショット入力
 								code <- btn_h
 							}
@@ -219,13 +231,62 @@ func tune() {
 		cmd := exec.Command("/usr/local/share/mpvradio/plugins/"+args[1], args[2])
 		err := cmd.Run()
 		if err != nil {
-			linebuf1 = "Tuning Error"
+			stmp := "Tuning Error"
+			infoupdate(0, &stmp)
 		}
 	} else {
 		s := fmt.Sprintf("{\"command\": [\"loadfile\",\"%s\"]}\x0a", stlist[pos].url)
 		mpv_send(s)
 	}
 	
+}
+
+func alarm_time_inc () {
+	if alarm_set_pos == 0 {
+		// hour
+		alarm_time = alarm_time.Add(1*time.Hour)
+	} else {
+		// minute
+		alarm_time = alarm_time.Add(1*time.Minute)
+	}
+}
+
+func showclock() {
+	var s, s0,s1,s2 string
+	
+	mu.Lock()
+	// alarm
+	if clock_mode & 1 == 1 {
+		if alarm_set_mode && colon == 1 {
+			if alarm_set_pos == 0 {
+				// blink hour
+				s0 = fmt.Sprintf("A  :%02d", alarm_time.Minute())
+				
+			} else {
+				// blink minute
+				s0 = fmt.Sprintf("A%02d:  ", alarm_time.Hour())
+			} 
+		} else {
+			s0 = fmt.Sprintf("A%02d:%02d", alarm_time.Hour(),
+										alarm_time.Minute())
+		}
+	} else {
+		s0 = "      "
+	}
+	
+	// sleep
+	if clock_mode & 2 == 2 {
+		s1 = "S"
+	} else {
+		s1 = " " 
+	}
+	
+	s2 = fmt.Sprintf("%02d%c%02d", time.Now().Hour(),
+									[]uint8{' ',':'}[colon],
+										time.Now().Minute())
+	s = fmt.Sprintf("%s %s   %s", s0, s1, s2)
+	oled.PrintWithPos(0,1,[]byte(s))
+	mu.Unlock()
 }
 
 func main() {
@@ -239,15 +300,13 @@ func main() {
 	oled.Configure()
 	oled.PrintWithPos(0, 0, []byte("radio"))
 
-	tty, err := tty.Open();
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer tty.Close()
-	
 	mpvprocess = exec.Command("/usr/bin/mpv", MPVOPTION1, MPVOPTION2, MPVOPTION3, MPVOPTION4, MPVOPTION5)
 	err = mpvprocess.Start()
 	if err != nil {
+		stmp := "mpv fault."
+		infoupdate(0, &stmp)
+		stmp = "HUP"
+		infoupdate(1, &stmp)
 		log.Fatal(err)
 	}
 
@@ -262,19 +321,27 @@ func main() {
 		}
 		time.Sleep(200*time.Millisecond)
 		if i > 30 {
+			mes := "mpv conn error."
+			infoupdate(0, &mes)
+			mes = "HUP"
+			infoupdate(1, &mes)
 			log.Fatal(err)	// time out
 		}
 	}
 
 	colonblink := time.NewTicker(500*time.Millisecond)
-	
-	linebuf1 = ""
-	linebuf2 = ""
+	 
 	pos = 0
-	volume = 50
+	volume = 40
 	mpv_setvol (volume)
 	colon = 0
-	var m2 sync.Mutex
+	clock_mode = clock_mode_normal
+	
+	select_btn_repeat_count := 0
+	mode_btn_repeat_count := 0
+	alarm_set_mode = false
+	alarm_set_pos = 0
+	alarm_time = time.Date(2009, 1, 1, 12, 0, 0, 0, time.UTC)
 	btncode := make(chan ButtonCode)
 	go btninput(btncode)
 	
@@ -282,54 +349,93 @@ func main() {
 		select {
 			case <-colonblink.C:
 				colon ^= 1
+				showclock()
+				
 			case r := <-btncode:
 				switch r {
-					//~ case (btn_station_select|btn_station_repeat):
+					case btn_station_mode:
+						if alarm_set_mode {
+							// アラーム設定時は変更桁の遷移を行う
+							alarm_set_pos++
+							if alarm_set_pos >= 2 {
+								alarm_set_mode = false
+							}
+						} else {
+							// 通常時はアラーム、スリープのオンオフを行う
+							clock_mode++
+							clock_mode &= 3
+						}
+						
+					case (btn_station_mode|btn_station_repeat):
+						// alarm set
+						mode_btn_repeat_count++
+						if mode_btn_repeat_count > 4 {
+							// アラーム時刻の設定へ
+							alarm_set_mode = true
+							alarm_set_pos = 0
+						}
+						
 					case (btn_station_select):
-						mpv_send("{\"command\": [\"stop\"]}\x0a")
-						linebuf1 = "stop"
+						infoupdate(0, &stlist[pos].name)
+						tune()
+					
+					case (btn_station_select|btn_station_repeat):
+						select_btn_repeat_count++
+						if select_btn_repeat_count > 4 {
+							mpv_send("{\"command\": [\"stop\"]}\x0a")
+							stmp := "                "
+							infoupdate(0, &stmp)
+						}
 						
 					case btn_station_repeat_end:
-							linebuf1 = stlist[pos].name
-							tune()
+						if alarm_set_mode == false {
+							if select_btn_repeat_count == 0 && mode_btn_repeat_count == 0 { 
+								infoupdate(0, &stlist[pos].name)
+								tune()
+							}
+						}
+						select_btn_repeat_count = 0
+						mode_btn_repeat_count = 0
 						
 					case (btn_station_next|btn_station_repeat):
+						if alarm_set_mode {
+							// アラーム設定時は時刻設定を行う
+							alarm_time_inc ()
+						} else {
 							if pos < stlen -1 {
 								pos++
-								linebuf1 = stlist[pos].name
+								infoupdate(0, &stlist[pos].name)
 							}
+						}
 						
 					case btn_station_next:
+						if alarm_set_mode {
+							// アラーム設定時は時刻設定を行う
+							alarm_time_inc ()
+						} else {
 							if pos < stlen -1 {
 								pos++
-								linebuf1 = stlist[pos].name
+								infoupdate(0, &stlist[pos].name)
 								tune()
 							}
+						}
 						
 					case (btn_station_prior|btn_station_repeat):
-							if pos > 0 {
-								pos--
-								linebuf1 = stlist[pos].name
-							}
+						if pos > 0 {
+							pos--
+							infoupdate(0, &stlist[pos].name)
+						}
 						
 					case btn_station_prior:
-							if pos > 0 {
-								pos--
-								linebuf1 = stlist[pos].name
-								tune()
-							}
+						if pos > 0 {
+							pos--
+							infoupdate(0, &stlist[pos].name)
+							tune()
+						}
 				}
 
 			default:
-				time.Sleep(100*time.Millisecond)
-				cs := " "
-				if colon == 1 {
-					cs = ":"
-				}
-				m2.Lock()
-				linebuf2 = fmt.Sprintf("%02d%s%02d", time.Now().Hour(),cs,time.Now().Minute())
-				m2.Unlock()
-				infoupdate()
+				time.Sleep(10*time.Millisecond)
 		}
 	}
 	
