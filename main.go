@@ -18,7 +18,8 @@ import (
 
 const (
 	stationlist string = "/usr/local/share/mpvradio/playlists/radio.m3u"
-	MPV_SOCKET_PATH string = "/run/user/1000/mpvsocket"
+	//~ MPV_SOCKET_PATH string = "/run/user/1000/mpvsocket"
+	MPV_SOCKET_PATH string = "/run/mpvsocket"
 	MPVOPTION1     string = "--idle"
 	MPVOPTION2     string = "--input-ipc-server="+MPV_SOCKET_PATH
 	MPVOPTION3     string = "--no-video"
@@ -403,7 +404,7 @@ func main() {
 			break
 		}
 		time.Sleep(200*time.Millisecond)
-		if i > 30 {
+		if i > 60 {
 			infoupdate(0, &errmessage[ERROR_MPV_CONN])
 			infoupdate(1, &errmessage[ERROR_HUP])
 			log.Fatal(err)	// time out
