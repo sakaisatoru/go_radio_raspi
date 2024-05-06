@@ -10,9 +10,7 @@ import (
 	"net"
 	"time"
 	"sync"
-	"math"
 	"encoding/json"
-	//~ "github.com/mattn/go-tty"
 	"github.com/davecheney/i2c"
 	"github.com/stianeikeland/go-rpio/v4"
 	"local.packages/aqm1602y"
@@ -26,6 +24,7 @@ const (
 	MPVOPTION3     string = "--no-video"
 	MPVOPTION4     string = "--no-cache"
 	MPVOPTION5     string = "--stream-buffer-size=256KiB"
+	mpvIRCbuffsize int = 1024
 )
 
 type ButtonCode int
@@ -43,7 +42,6 @@ const (
 	
 	btn_press_width int = 7
 	btn_press_long_width int = 80
-	
 )
 
 const (
@@ -65,6 +63,15 @@ type mpvIRC struct {
     Event		string	 `json:"event"`
 }
 
+const (
+	ERROR_HUP = iota
+	ERROR_MPV_CONN
+	ERROR_MPV_FAULT
+	SPACE16
+	ERROR_TUNING
+	ERROR_RPIO_NOT_OPEN
+)
+
 var (
 	mpv	net.Conn
 	oled aqm1602y.AQM1602Y
@@ -72,11 +79,9 @@ var (
 	stlist []*StationInfo
 	colon uint8
 	pos int
-	readbuf = make([]byte,1024)
+	readbuf = make([]byte, mpvIRCbuffsize)
 	mpvprocess *exec.Cmd
-	volume int
-	re_table = []int8{0,1,-1,0,-1,0,0,1,1,0,0,-1,0,-1,1,0}
-	re_count int = 0
+	volume int8
 	display_colon = []uint8{' ',':'}
 	display_sleep = []uint8{' ',' ','S'}
 	clock_mode uint8
@@ -84,6 +89,12 @@ var (
 	tuneoff_time time.Time
 	alarm_set_mode bool
 	alarm_set_pos int
+	errmessage = []string{"HUP             ",
+						"mpv conn error. ",
+						"mpv fault.      ",
+						"                ",
+						"tuning error.   ",
+						"rpio can't open."}
 )
 
 func setup_station_list () {
@@ -125,7 +136,7 @@ func mpv_send(s string) {
 			log.Fatal(err)
 		}
 		//~ fmt.Println(string(readbuf[:n]))
-		if n < 1024 {
+		if n < mpvIRCbuffsize {
 			break
 		}
 	}
@@ -136,16 +147,14 @@ func mpv_playing_now() bool {
 	rv := false
 	//~ mpv.Write([]byte("{\"command\": [\"get_property\",\"filename\"]}\x0a"))
 	mpv.Write([]byte("{\"command\": [\"get_property\",\"playlist\"]}\x0a"))
+
 	for {
 		n, err := mpv.Read(readbuf)
 		if err != nil {
-			mes := "mpv conn error."
-			infoupdate(0, &mes)
-			mes = "HUP"
-			infoupdate(1, &mes)
+			infoupdate(0, &errmessage[ERROR_MPV_CONN])
+			infoupdate(1, &errmessage[ERROR_HUP])
 			log.Fatal(err)	
 		}
-
 exit_this:
 		for _, elem := range strings.Split(string(readbuf[:n]),"\n") {
 			if err := json.Unmarshal([]byte("[ "+elem+" ]"), &res); err != nil {
@@ -162,24 +171,31 @@ exit_this:
 				}
 			}
 		}
-		
-		if n < 1024 {
+		if n < mpvIRCbuffsize {
 			break
 		}
 	}
 	return rv
 }
 
-func mpv_setvol(vol int) int {
-	var v int
+var (
+	volconv = []int8{	0,1,2,3,4,4,5,6,6,7,7,8,8,9,9,10,10,11,11,
+						11,12,12,13,13,13,14,14,14,15,15,16,16,16,17,
+						17,17,18,18,18,19,19,20,20,20,21,21,22,22,23,
+						23,24,24,25,25,26,26,27,27,28,28,29,30,30,31,
+						32,32,33,34,35,35,36,37,38,39,40,41,42,43,45,
+						46,47,49,50,52,53,55,57,59,61,63,66,68,71,74,
+						78,81,85,90,95,100}
+)
+
+func mpv_setvol(vol int8) {
 	if vol < 1 {
-		v = 1
-	} else {
-		v = int(math.Log(float64(vol))*(100/4.6)*-1+100)
-	}
-	s := fmt.Sprintf("{\"command\": [\"set_property\",\"volume\",%d]}\x0a",v)
+		vol = 0
+	} else if vol >= 100 {
+		vol = 99
+	} 
+	s := fmt.Sprintf("{\"command\": [\"set_property\",\"volume\",%d]}\x0a",volconv[vol])
 	mpv_send(s)
-	return v
 }
 
 func infoupdate(line uint8, mes *string) {
@@ -192,10 +208,8 @@ func infoupdate(line uint8, mes *string) {
 func btninput(code chan<- ButtonCode) {
 	err := rpio.Open()
 	if err != nil {
-		mes := "rpio not open."
-		infoupdate(0, &mes)
-		mes = "HUP"
-		infoupdate(1, &mes)
+		infoupdate(0, &errmessage[ERROR_RPIO_NOT_OPEN])
+		infoupdate(1, &errmessage[ERROR_HUP])
 		log.Fatal(err)
 	}
 	defer rpio.Close()
@@ -204,17 +218,26 @@ func btninput(code chan<- ButtonCode) {
 		sn.Input()
 		sn.PullUp()
 	}
+	
+	rpio.Pin(23).Output()	// AF amp 制御用
+	rpio.Pin(23).PullUp()
+	rpio.Pin(23).Low()		// AF amp disable	
+	
 	hold := 0
 	btn_h := btn_station_none
 	
+	re_table := []int8{0,1,-1,0,-1,0,0,1,1,0,0,-1,0,-1,1,0}
+	re_count := 0
+
 	for {
 		time.Sleep(10*time.Millisecond)
 		// ロータリーエンコーダ
-		retmp := (uint8(btnscan[4].Read())<<1) | uint8(btnscan[5].Read())
+		//~ retmp := (uint8(btnscan[4].Read())<<1) | uint8(btnscan[5].Read())
+		retmp := (uint8(btnscan[5].Read())<<1) | uint8(btnscan[4].Read())
 		re_count = (re_count << 2) + int(retmp)
 		n := re_table[re_count & 15]
 		if n != 0 {
-			volume += int(n)
+			volume += n
 			if volume > 100 {
 				volume = 100
 			} else if volume < 1 {
@@ -227,7 +250,6 @@ func btninput(code chan<- ButtonCode) {
 			case 0:
 				for i, sn := range(btnscan[:btn_station_select]) {
 					// 押されているボタンがあれば、そのコードを保存する
-					//~ if rpio.ReadPin(sn) == rpio.Low {
 					if sn.Read() == rpio.Low {
 						btn_h = ButtonCode(i+1)
 						hold = 0
@@ -240,7 +262,6 @@ func btninput(code chan<- ButtonCode) {
 			default:
 				for i, sn := range(btnscan[:btn_station_select]) {
 					if btn_h == ButtonCode(i+1) {
-						//~ if rpio.ReadPin(sn) == rpio.Low {
 						if sn.Read() == rpio.Low {
 							// 引き続き押されている
 							hold++
@@ -277,19 +298,19 @@ func tune() {
 		cmd := exec.Command("/usr/local/share/mpvradio/plugins/"+args[1], args[2])
 		err := cmd.Run()
 		if err != nil {
-			stmp := "Tuning Error    "
-			infoupdate(0, &stmp)
+			infoupdate(0, &errmessage[ERROR_TUNING])
 		}
 	} else {
 		s := fmt.Sprintf("{\"command\": [\"loadfile\",\"%s\"]}\x0a", stlist[pos].url)
 		mpv_send(s)
 	}
+	rpio.Pin(23).High()		// AF amp enable
 }
 
 func radio_stop() {
 	mpv_send("{\"command\": [\"stop\"]}\x0a")
-	stmp := "                "
-	infoupdate(0, &stmp)
+	infoupdate(0, &errmessage[SPACE16])
+	rpio.Pin(23).Low()		// AF amp disable
 }
 
 func alarm_time_inc () {
@@ -324,7 +345,6 @@ func showclock() {
 			if alarm_set_pos == 0 {
 				// blink hour
 				s0 = fmt.Sprintf("A  :%02d", alarm_time.Minute())
-				
 			} else {
 				// blink minute
 				s0 = fmt.Sprintf("A%02d:  ", alarm_time.Hour())
@@ -360,13 +380,19 @@ func main() {
 												MPVOPTION5)
 	err = mpvprocess.Start()
 	if err != nil {
-		stmp := "mpv fault."
-		infoupdate(0, &stmp)
-		stmp = "HUP"
-		infoupdate(1, &stmp)
+		infoupdate(0, &errmessage[ERROR_MPV_FAULT])
+		infoupdate(1, &errmessage[ERROR_HUP])
 		log.Fatal(err)
 	}
-
+	defer func() {
+		// shutdown this program
+		err = mpvprocess.Process.Kill()
+		if err != nil {
+			log.Println(err)
+		}
+		oled.DisplayOff()
+	}()
+	
 	setup_station_list()
 	stlen := len(stlist)
 
@@ -378,10 +404,8 @@ func main() {
 		}
 		time.Sleep(200*time.Millisecond)
 		if i > 30 {
-			mes := "mpv conn error."
-			infoupdate(0, &mes)
-			mes = "HUP"
-			infoupdate(1, &mes)
+			infoupdate(0, &errmessage[ERROR_MPV_CONN])
+			infoupdate(1, &errmessage[ERROR_HUP])
 			log.Fatal(err)	// time out
 		}
 	}
@@ -389,7 +413,7 @@ func main() {
 	colonblink := time.NewTicker(500*time.Millisecond)
 	 
 	pos = 0
-	volume = 40
+	volume = 60
 	mpv_setvol (volume)
 	colon = 0
 	clock_mode = clock_mode_normal
@@ -402,6 +426,7 @@ func main() {
 	alarm_time = time.Unix(0, 0).UTC()
 	tuneoff_time = time.Unix(0, 0).UTC()
 	btncode := make(chan ButtonCode)
+	
 	go btninput(btncode)
 	
 	for {
@@ -459,20 +484,16 @@ func main() {
 							alarm_set_pos = 0
 						}
 						
+					case (btn_station_select|btn_station_repeat):
+						select_btn_repeat_count++
+						fallthrough
+						
 					case (btn_station_select):
 						if mpv_playing_now() == true {
-							//~ fmt.Println("true")
 							radio_stop()
 						} else {
-							//~ fmt.Println("false")
 							tune()
 						}
-					
-					case (btn_station_select|btn_station_repeat):
-						//~ select_btn_repeat_count++
-						//~ if select_btn_repeat_count > 3 {
-							//~ radio_stop()
-						//~ }
 						
 					case btn_station_repeat_end:
 						if alarm_set_mode == false {
@@ -506,7 +527,7 @@ func main() {
 								tune()
 							}
 						}
-						
+
 					case (btn_station_prior|btn_station_repeat):
 						if alarm_set_mode {
 							// アラーム設定時は時刻設定を行う
@@ -519,6 +540,7 @@ func main() {
 								infoupdate(0, &stlist[pos].name)
 							}
 						}
+
 					case btn_station_prior:
 						if alarm_set_mode {
 							// アラーム設定時は時刻設定を行う
@@ -530,14 +552,6 @@ func main() {
 							}
 						}
 				}
-
 		}
 	}
-	
-	// shutdown this program
-	err = mpvprocess.Process.Kill()
-	if err != nil {
-		log.Println(err)
-	}
-	oled.DisplayOff()
 }
