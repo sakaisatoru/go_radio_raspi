@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	stationlist string = "radio.m3u"
+	stationlist string = "/usr/local/share/mpvradio/playlists/radio.m3u"
 	MPV_SOCKET_PATH string = "/run/user/1000/mpvsocket"
 	MPVOPTION1     string = "--idle"
 	MPVOPTION2     string = "--input-ipc-server="+MPV_SOCKET_PATH

@@ -1,0 +1,13 @@
+[Unit]
+Description = ラジオを起動する
+After=local-fs.target network-online.target
+ConditionPathExists=/home/pi/program/go_radio
+
+[Service]
+ExecStart=/home/pi/program/go_radio/radio
+Type=exec
+Restart=oneshot
+User=pi
+
+[Install]
+WantedBy = multi-user.target
