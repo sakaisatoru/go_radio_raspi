@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
+	"syscall"
 	"bufio"
 	"log"
 	"strings"
@@ -214,7 +216,8 @@ func btninput(code chan<- ButtonCode) {
 		log.Fatal(err)
 	}
 	defer rpio.Close()
-	btnscan := []rpio.Pin{26, 5, 22, 6, 17, 27}
+	//~ btnscan := []rpio.Pin{26, 5, 22, 6, 17, 27}
+	btnscan := []rpio.Pin{26, 5, 6, 22, 17, 27}
 	for _, sn := range(btnscan) {
 		sn.Input()
 		sn.PullUp()
@@ -300,12 +303,14 @@ func tune() {
 		err := cmd.Run()
 		if err != nil {
 			infoupdate(0, &errmessage[ERROR_TUNING])
+		} else {
+			rpio.Pin(23).High()		// AF amp enable
 		}
 	} else {
 		s := fmt.Sprintf("{\"command\": [\"loadfile\",\"%s\"]}\x0a", stlist[pos].url)
 		mpv_send(s)
+		rpio.Pin(23).High()		// AF amp enable
 	}
-	rpio.Pin(23).High()		// AF amp enable
 }
 
 func radio_stop() {
@@ -385,13 +390,25 @@ func main() {
 		infoupdate(1, &errmessage[ERROR_HUP])
 		log.Fatal(err)
 	}
-	defer func() {
+	
+	// シグナルハンドラ
+	go func() {
 		// shutdown this program
-		err = mpvprocess.Process.Kill()
-		if err != nil {
-			log.Println(err)
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGINT)
+		
+		s := <-signals
+		switch s {
+			case syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGINT:
+				err = mpvprocess.Process.Kill()
+				if err != nil {
+					log.Println(err)
+				}
+				rpio.Pin(23).Low()		// AF amp disable
+				oled.DisplayOff()
+				close(signals)
+				os.Exit(0)
 		}
-		oled.DisplayOff()
 	}()
 	
 	setup_station_list()
