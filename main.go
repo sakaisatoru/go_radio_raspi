@@ -40,6 +40,7 @@ const (
 	btn_station_re_forward
 	btn_station_re_backward
 	btn_station_repeat_end
+	btn_system_shutdown
 	
 	btn_station_repeat = 0x80
 	
@@ -59,8 +60,14 @@ type StationInfo struct {
 	url string
 }
 
+type MpvIRCdata struct {
+	Filename	*string		`json:"filename"`
+	Current		bool		`json:"current"`
+	Playing		bool		`json:"playing"`
+}
+ 
 type mpvIRC struct {
-    Data       	interface{}	 `json:"data"`
+    Data       	*MpvIRCdata	 `json:"data"`
 	Request_id  *int	 `json:"request_id"`
     Err 		string	 `json:"error"`
     Event		string	 `json:"event"`
@@ -148,8 +155,8 @@ func mpv_send(s string) {
 func mpv_playing_now() bool {
 	var res []mpvIRC
 	rv := false
-	//~ mpv.Write([]byte("{\"command\": [\"get_property\",\"filename\"]}\x0a"))
-	mpv.Write([]byte("{\"command\": [\"get_property\",\"playlist\"]}\x0a"))
+	mpv.Write([]byte("{\"command\": [\"get_property\",\"filename\"]}\x0a"))
+	//~ mpv.Write([]byte("{\"command\": [\"get_property\",\"playlist\"]}\x0a"))
 
 	for {
 		n, err := mpv.Read(readbuf)
@@ -158,6 +165,7 @@ func mpv_playing_now() bool {
 			infoupdate(1, &errmessage[ERROR_HUP])
 			log.Fatal(err)	
 		}
+		//~ fmt.Println(string(readbuf[:n]))
 exit_this:
 		for _, elem := range strings.Split(string(readbuf[:n]),"\n") {
 			if err := json.Unmarshal([]byte("[ "+elem+" ]"), &res); err != nil {
@@ -165,12 +173,17 @@ exit_this:
 			}
 			for _, r := range res {
 				if r.Err == "property unavailable" {
-					continue
-				}
-				if r.Err == "success" && r.Request_id != nil && r.Data != nil {
-					//~ fmt.Println(r.Data)
-					rv = true
+					rv = false
 					break exit_this
+				}
+				if r.Err == "success"  {
+					if r.Data == nil {
+						rv = false
+						break exit_this
+					} else {
+						rv = true
+						break exit_this
+					}
 				}
 			}
 		}
@@ -236,7 +249,6 @@ func btninput(code chan<- ButtonCode) {
 	for {
 		time.Sleep(10*time.Millisecond)
 		// ロータリーエンコーダ
-		//~ retmp := (uint8(btnscan[4].Read())<<1) | uint8(btnscan[5].Read())
 		retmp := (uint8(btnscan[5].Read())<<1) | uint8(btnscan[4].Read())
 		re_count = (re_count << 2) + int(retmp)
 		n := re_table[re_count & 15]
@@ -270,6 +282,12 @@ func btninput(code chan<- ButtonCode) {
 							// 引き続き押されている
 							hold++
 							if hold > btn_press_long_width {
+								if btn_h == btn_station_mode {
+									// mode と selectの同時押しの特殊処理
+									if btnscan[btn_station_select-1].Read() == rpio.Low { 
+										btn_h = btn_system_shutdown
+									}
+								}
 								// リピート入力
 								// 表示が追いつかないのでリピート幅を調整すること
 								hold--
@@ -369,6 +387,7 @@ func showclock() {
 	s := fmt.Sprintf("%s %c   %s", s0, display_sleep[clock_mode & 2], s2)
 	oled.PrintWithPos(0,1,[]byte(s))
 }
+
 
 func main() {
 	// OLED or LCD
@@ -476,6 +495,13 @@ func main() {
 				
 			case r := <-btncode:
 				switch r {
+					case btn_system_shutdown|btn_station_repeat:
+						stmp := "shutdown now"
+						infoupdate(0, &stmp)
+						time.Sleep(700*time.Millisecond)
+						cmd := exec.Command("/usr/bin/sudo", "/usr/sbin/poweroff")
+						cmd.Run()
+						
 					case btn_station_mode:
 						if alarm_set_mode {
 							// アラーム設定時は変更桁の遷移を行う
