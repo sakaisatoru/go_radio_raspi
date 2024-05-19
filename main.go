@@ -27,6 +27,7 @@ const (
 	MPVOPTION3     string = "--no-video"
 	MPVOPTION4     string = "--no-cache"
 	MPVOPTION5     string = "--stream-buffer-size=256KiB"
+	MPVOPTION6	   string = "--script=/home/pi/bin/title_trigger.lua"
 	mpvIRCbuffsize int = 1024
 )
 
@@ -71,6 +72,12 @@ type mpvIRC struct {
 	Request_id  *int	 `json:"request_id"`
     Err 		string	 `json:"error"`
     Event		string	 `json:"event"`
+}
+
+type mpvGetProperty struct {
+	Data       	*string	 	`json:"data"`
+	Request_id  *int	 	`json:"request_id"`
+	Err 		string	 	`json:"error"`
 }
 
 const (
@@ -150,6 +157,48 @@ func mpv_send(s string) {
 			break
 		}
 	}
+}
+
+
+
+func mpv_get_title_now() (string,bool) {
+	var res []mpvGetProperty
+	rv := false
+	rs := ""
+	mpv.Write([]byte("{\"command\": [\"get_property\",\"metadate/by-key/icy-title\"]}\x0a"))
+	//~ {"data":"The War on Drugs - Thinking Of A Place","request_id":0,"error":"success"}
+	//~ "error":"property not found"
+exit_this:
+	for {
+		n, err := mpv.Read(readbuf)
+		if err != nil {
+			infoupdate(0, &errmessage[ERROR_MPV_CONN])
+			infoupdate(1, &errmessage[ERROR_HUP])
+			log.Fatal(err)	
+		}
+
+		if err := json.Unmarshal([]byte("[ "+string(readbuf[:n])+" ]"), &res); err != nil {
+			break
+		}
+		fmt.Println(string(readbuf[:n]))
+		for _, r := range res {
+			if r.Err == "property unavailable" {
+				rv = false
+				break
+			}
+			if r.Err == "success"  {
+				rv = true
+				if r.Data != nil {
+					rs = *r.Data
+				}
+				break exit_this
+			}
+		}
+		if n < mpvIRCbuffsize {
+			break
+		}
+	}
+	return rs, rv
 }
 
 func mpv_playing_now() bool {
@@ -402,7 +451,7 @@ func main() {
 
 	mpvprocess = exec.Command("/usr/bin/mpv", 	MPVOPTION1, MPVOPTION2, 
 												MPVOPTION3, MPVOPTION4, 
-												MPVOPTION5)
+												MPVOPTION5, MPVOPTION6)
 	err = mpvprocess.Start()
 	if err != nil {
 		infoupdate(0, &errmessage[ERROR_MPV_FAULT])
@@ -411,22 +460,36 @@ func main() {
 	}
 	
 	// シグナルハンドラ
+	mediatitle := ""
+	mediatitlepos := 0
 	go func() {
 		// shutdown this program
 		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGINT)
+		signal.Notify(signals, syscall.SIGUSR1, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGINT)
 		
-		s := <-signals
-		switch s {
-			case syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGINT:
-				err = mpvprocess.Process.Kill()
-				if err != nil {
-					log.Println(err)
-				}
-				rpio.Pin(23).Low()		// AF amp disable
-				oled.DisplayOff()
-				close(signals)
-				os.Exit(0)
+		for {
+			s := <-signals
+			switch s {
+				case syscall.SIGUSR1:
+					// mpv側のイベント対応用（主に曲名取得を想定）
+					stmp, f := mpv_get_title_now()
+					if f {
+						mediatitle = stlist[pos].name + " " + stmp + "  "
+						mediatitlepos = 0
+					} else {
+						mediatitle = ""
+					}
+					
+				case syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGINT:
+					err = mpvprocess.Process.Kill()
+					if err != nil {
+						log.Println(err)
+					}
+					rpio.Pin(23).Low()		// AF amp disable
+					oled.DisplayOff()
+					close(signals)
+					os.Exit(0)
+			}
 		}
 	}()
 	
@@ -484,12 +547,21 @@ func main() {
 						if tuneoff_time.Hour() == time.Now().Hour() &&
 						   tuneoff_time.Minute() == time.Now().Minute() {
 							clock_mode ^= clock_mode_sleep
+							mediatitle=""
 							radio_stop()
 						}
 					}
 				}
 				
 			case <-colonblink.C:
+				if colon == 1 && mediatitle != "" {
+					if mediatitlepos >= len(mediatitle) {
+						mediatitlepos = 0
+					}
+					stmp := string([]byte(mediatitle[mediatitlepos:]+mediatitle[:17])[0:17])
+					infoupdate(0, &stmp)
+					mediatitlepos++
+				}
 				colon ^= 1
 				showclock()
 				
@@ -534,6 +606,7 @@ func main() {
 						
 					case (btn_station_select):
 						if mpv_playing_now() == true {
+							mediatitle=""
 							radio_stop()
 						} else {
 							tune()
