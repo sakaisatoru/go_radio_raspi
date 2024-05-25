@@ -12,6 +12,7 @@ import (
 	"net"
 	"time"
 	"sync"
+	//~ "bytes"
 	"encoding/json"
 	"github.com/davecheney/i2c"
 	"github.com/stianeikeland/go-rpio/v4"
@@ -20,7 +21,6 @@ import (
 
 const (
 	stationlist string = "/usr/local/share/mpvradio/playlists/radio.m3u"
-	//~ MPV_SOCKET_PATH string = "/run/user/1000/mpvsocket"
 	MPV_SOCKET_PATH string = "/run/mpvsocket"
 	MPVOPTION1     string = "--idle"
 	MPVOPTION2     string = "--input-ipc-server="+MPV_SOCKET_PATH
@@ -78,6 +78,7 @@ type mpvGetProperty struct {
 	Data       	*string	 	`json:"data"`
 	Request_id  *int	 	`json:"request_id"`
 	Err 		string	 	`json:"error"`
+    Event		*string	 `json:"event"`
 }
 
 const (
@@ -87,6 +88,7 @@ const (
 	SPACE16
 	ERROR_TUNING
 	ERROR_RPIO_NOT_OPEN
+	ERROR_SOCKET_NOT_OPEN
 )
 
 var (
@@ -96,11 +98,15 @@ var (
 	stlist []*StationInfo
 	colon uint8
 	pos int
+	radio_enable bool
 	readbuf = make([]byte, mpvIRCbuffsize)
 	mpvprocess *exec.Cmd
 	volume int8
 	display_colon = []uint8{' ',':'}
 	display_sleep = []uint8{' ',' ','S'}
+	display_buff string
+	display_buff_len int8
+	display_buff_pos int8
 	clock_mode uint8
 	alarm_time time.Time
 	tuneoff_time time.Time
@@ -111,7 +117,8 @@ var (
 						"mpv fault.      ",
 						"                ",
 						"tuning error.   ",
-						"rpio can't open."}
+						"rpio can't open.",
+						"socket not open."}
 )
 
 func setup_station_list () {
@@ -161,46 +168,6 @@ func mpv_send(s string) {
 
 
 
-func mpv_get_title_now() (string,bool) {
-	var res []mpvGetProperty
-	rv := false
-	rs := ""
-	mpv.Write([]byte("{\"command\": [\"get_property\",\"metadate/by-key/icy-title\"]}\x0a"))
-	//~ {"data":"The War on Drugs - Thinking Of A Place","request_id":0,"error":"success"}
-	//~ "error":"property not found"
-exit_this:
-	for {
-		n, err := mpv.Read(readbuf)
-		if err != nil {
-			infoupdate(0, &errmessage[ERROR_MPV_CONN])
-			infoupdate(1, &errmessage[ERROR_HUP])
-			log.Fatal(err)	
-		}
-
-		if err := json.Unmarshal([]byte("[ "+string(readbuf[:n])+" ]"), &res); err != nil {
-			break
-		}
-		fmt.Println(string(readbuf[:n]))
-		for _, r := range res {
-			if r.Err == "property unavailable" {
-				rv = false
-				break
-			}
-			if r.Err == "success"  {
-				rv = true
-				if r.Data != nil {
-					rs = *r.Data
-				}
-				break exit_this
-			}
-		}
-		if n < mpvIRCbuffsize {
-			break
-		}
-	}
-	return rs, rv
-}
-
 func mpv_playing_now() bool {
 	var res []mpvIRC
 	rv := false
@@ -214,7 +181,6 @@ func mpv_playing_now() bool {
 			infoupdate(1, &errmessage[ERROR_HUP])
 			log.Fatal(err)	
 		}
-		//~ fmt.Println(string(readbuf[:n]))
 exit_this:
 		for _, elem := range strings.Split(string(readbuf[:n]),"\n") {
 			if err := json.Unmarshal([]byte("[ "+elem+" ]"), &res); err != nil {
@@ -266,8 +232,19 @@ func mpv_setvol(vol int8) {
 func infoupdate(line uint8, mes *string) {
 	mu.Lock()
 	defer mu.Unlock()
-
-	oled.PrintWithPos(0, line, []byte(string(*mes)))
+	display_buff_len = int8(len(*mes))
+	display_buff_pos = 0
+	if display_buff_len >= 17 {
+		if line == 0 {
+			display_buff = *mes + "  " + *mes
+		}
+		oled.PrintWithPos(0, line, []byte(*mes)[:17])
+	} else {
+		if line == 0 {
+			display_buff = *mes
+		}
+		oled.PrintWithPos(0, line, []byte(*mes))
+	}
 }
 
 func btninput(code chan<- ButtonCode) {
@@ -370,13 +347,16 @@ func tune() {
 		err := cmd.Run()
 		if err != nil {
 			infoupdate(0, &errmessage[ERROR_TUNING])
+			radio_enable = false
 		} else {
 			rpio.Pin(23).High()		// AF amp enable
+			radio_enable = true
 		}
 	} else {
 		s := fmt.Sprintf("{\"command\": [\"loadfile\",\"%s\"]}\x0a", stlist[pos].url)
 		mpv_send(s)
 		rpio.Pin(23).High()		// AF amp enable
+		radio_enable = true
 	}
 }
 
@@ -384,6 +364,7 @@ func radio_stop() {
 	mpv_send("{\"command\": [\"stop\"]}\x0a")
 	infoupdate(0, &errmessage[SPACE16])
 	rpio.Pin(23).Low()		// AF amp disable
+	radio_enable = false
 }
 
 func alarm_time_inc () {
@@ -434,9 +415,97 @@ func showclock() {
 									display_colon[colon],
 										time.Now().Minute())
 	s := fmt.Sprintf("%s %c   %s", s0, display_sleep[clock_mode & 2], s2)
-	oled.PrintWithPos(0,1,[]byte(s))
+	oled.PrintWithPos(0, 1, []byte(s))
+	
+	// １行目の表示
+	// 文字列があふれる場合はスクロールする
+	if display_buff_len <= 16 {
+		oled.PrintWithPos(0, 0, []byte(display_buff))
+	} else {
+		oled.PrintWithPos(0, 0, []byte(display_buff)[display_buff_pos:display_buff_pos+17])
+		display_buff_pos++
+		if display_buff_pos >= int8(display_buff_len + 2) {
+			display_buff_pos = 0
+		} 
+	}
 }
 
+//~ func mpv_get_title() string {
+	// mpv で受信した曲情報を返す
+	// URL遷移直後は直前の曲情報に続けてeventを吐くので、その場合は
+	// 曲情報を捨てる
+	//~ var res []mpvGetProperty
+	//~ rv := ""
+	//~ mpv.Write([]byte("{\"command\": [\"get_property\",\"metadata/by-key/icy-title\"]}\x0a"))
+
+	//~ for {
+		//~ n, err := mpv.Read(readbuf)
+		//~ if err != nil {
+			//~ infoupdate(0, &errmessage[ERROR_MPV_CONN])
+			//~ infoupdate(1, &errmessage[ERROR_HUP])
+			//~ log.Fatal(err)	
+		//~ }
+
+		//~ for _, elem := range strings.Split(string(readbuf[:n]),"\n") {
+			//~ if err := json.Unmarshal([]byte("[ "+elem+" ]"), &res); err != nil {
+				//~ continue
+			//~ }
+			//~ for _, r := range res {
+				//~ if r.Event != nil {
+					//~ rv = ""
+					//~ continue
+				//~ }
+				//~ if r.Err == "property unavailable" {
+					//~ rv = ""
+					//~ continue
+				//~ }
+				//~ if r.Err == "success"  {
+					//~ if r.Data == nil {
+						//~ rv = ""
+					//~ } else {
+						//~ rv = *r.Data
+					//~ }
+				//~ }
+			//~ }
+		//~ }
+		//~ if n < mpvIRCbuffsize {
+			//~ break
+		//~ }
+	//~ }
+	//~ return rv
+//~ }
+
+func recv_title(socket net.Listener) {
+	var stmp string
+	buf := make([]byte, 1024)
+	for {
+		n := func () int {
+			conn, err := socket.Accept()
+			if err != nil {
+				return 0
+			}
+			defer conn.Close()
+			n := 0
+			for {
+				n, err = conn.Read(buf)
+				if err != nil {
+					return 0
+				}
+				if n < 1024 {
+					break
+				}
+			}
+			conn.Write([]byte("OK\n"))
+			return n
+		}()
+		if radio_enable == true {
+			stmp = stlist[pos].name + "  " + string(buf[:n])
+		} else {
+			stmp = string(buf[:n]) + "  "
+		}
+		infoupdate(0, &stmp)
+	}
+}
 
 func main() {
 	// OLED or LCD
@@ -452,6 +521,15 @@ func main() {
 	mpvprocess = exec.Command("/usr/bin/mpv", 	MPVOPTION1, MPVOPTION2, 
 												MPVOPTION3, MPVOPTION4, 
 												MPVOPTION5, MPVOPTION6)
+	
+	radiosocket, err := net.Listen("unix", "/run/mpvradio")
+	if err != nil {
+		infoupdate(0, &errmessage[ERROR_SOCKET_NOT_OPEN])
+		infoupdate(1, &errmessage[ERROR_HUP])
+		log.Fatal(err)
+	}
+	defer radiosocket.Close()
+
 	err = mpvprocess.Start()
 	if err != nil {
 		infoupdate(0, &errmessage[ERROR_MPV_FAULT])
@@ -460,26 +538,18 @@ func main() {
 	}
 	
 	// シグナルハンドラ
-	mediatitle := ""
-	mediatitlepos := 0
 	go func() {
 		// shutdown this program
 		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, syscall.SIGUSR1, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGINT)
+		//~ signal.Notify(signals, syscall.SIGUSR1, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGINT)
+		signal.Notify(signals, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGINT)
 		
 		for {
 			s := <-signals
 			switch s {
-				case syscall.SIGUSR1:
-					// mpv側のイベント対応用（主に曲名取得を想定）
-					stmp, f := mpv_get_title_now()
-					if f {
-						mediatitle = stlist[pos].name + " " + stmp + "  "
-						mediatitlepos = 0
-					} else {
-						mediatitle = ""
-					}
-					
+				//~ case syscall.SIGUSR1:
+					//~ stmp := stlist[pos].name + "  " + mpv_get_title ()
+					//~ infoupdate(0, &stmp)
 				case syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGINT:
 					err = mpvprocess.Process.Kill()
 					if err != nil {
@@ -511,7 +581,8 @@ func main() {
 	}
 
 	colonblink := time.NewTicker(500*time.Millisecond)
-	 
+	
+	radio_enable = false
 	pos = 0
 	volume = 60
 	mpv_setvol (volume)
@@ -526,8 +597,11 @@ func main() {
 	alarm_time = time.Unix(0, 0).UTC()
 	tuneoff_time = time.Unix(0, 0).UTC()
 	btncode := make(chan ButtonCode)
+	display_buff = ""
+	display_buff_pos = 0
 	
 	go btninput(btncode)
+	go recv_title(radiosocket)
 	
 	for {
 		select {
@@ -547,28 +621,19 @@ func main() {
 						if tuneoff_time.Hour() == time.Now().Hour() &&
 						   tuneoff_time.Minute() == time.Now().Minute() {
 							clock_mode ^= clock_mode_sleep
-							mediatitle=""
 							radio_stop()
 						}
 					}
 				}
 				
 			case <-colonblink.C:
-				if colon == 1 && mediatitle != "" {
-					if mediatitlepos >= len(mediatitle) {
-						mediatitlepos = 0
-					}
-					stmp := string([]byte(mediatitle[mediatitlepos:]+mediatitle[:17])[0:17])
-					infoupdate(0, &stmp)
-					mediatitlepos++
-				}
 				colon ^= 1
 				showclock()
 				
 			case r := <-btncode:
 				switch r {
 					case btn_system_shutdown|btn_station_repeat:
-						stmp := "shutdown now"
+						stmp := "shutdown now    "
 						infoupdate(0, &stmp)
 						time.Sleep(700*time.Millisecond)
 						cmd := exec.Command("/usr/bin/sudo", "/usr/sbin/poweroff")
@@ -606,7 +671,6 @@ func main() {
 						
 					case (btn_station_select):
 						if mpv_playing_now() == true {
-							mediatitle=""
 							radio_stop()
 						} else {
 							tune()
