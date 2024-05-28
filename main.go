@@ -13,7 +13,7 @@ import (
 	"time"
 	"sync"
 	//~ "bytes"
-	"encoding/json"
+	//~ "encoding/json"
 	"github.com/davecheney/i2c"
 	"github.com/stianeikeland/go-rpio/v4"
 	"local.packages/aqm1602y"
@@ -72,13 +72,6 @@ type mpvIRC struct {
 	Request_id  *int	 `json:"request_id"`
     Err 		string	 `json:"error"`
     Event		string	 `json:"event"`
-}
-
-type mpvGetProperty struct {
-	Data       	*string	 	`json:"data"`
-	Request_id  *int	 	`json:"request_id"`
-	Err 		string	 	`json:"error"`
-    Event		*string	 `json:"event"`
 }
 
 const (
@@ -164,49 +157,6 @@ func mpv_send(s string) {
 			break
 		}
 	}
-}
-
-
-
-func mpv_playing_now() bool {
-	var res []mpvIRC
-	rv := false
-	mpv.Write([]byte("{\"command\": [\"get_property\",\"filename\"]}\x0a"))
-	//~ mpv.Write([]byte("{\"command\": [\"get_property\",\"playlist\"]}\x0a"))
-
-	for {
-		n, err := mpv.Read(readbuf)
-		if err != nil {
-			infoupdate(0, &errmessage[ERROR_MPV_CONN])
-			infoupdate(1, &errmessage[ERROR_HUP])
-			log.Fatal(err)	
-		}
-exit_this:
-		for _, elem := range strings.Split(string(readbuf[:n]),"\n") {
-			if err := json.Unmarshal([]byte("[ "+elem+" ]"), &res); err != nil {
-				continue
-			}
-			for _, r := range res {
-				if r.Err == "property unavailable" {
-					rv = false
-					break exit_this
-				}
-				if r.Err == "success"  {
-					if r.Data == nil {
-						rv = false
-						break exit_this
-					} else {
-						rv = true
-						break exit_this
-					}
-				}
-			}
-		}
-		if n < mpvIRCbuffsize {
-			break
-		}
-	}
-	return rv
 }
 
 var (
@@ -430,50 +380,6 @@ func showclock() {
 	}
 }
 
-//~ func mpv_get_title() string {
-	// mpv で受信した曲情報を返す
-	// URL遷移直後は直前の曲情報に続けてeventを吐くので、その場合は
-	// 曲情報を捨てる
-	//~ var res []mpvGetProperty
-	//~ rv := ""
-	//~ mpv.Write([]byte("{\"command\": [\"get_property\",\"metadata/by-key/icy-title\"]}\x0a"))
-
-	//~ for {
-		//~ n, err := mpv.Read(readbuf)
-		//~ if err != nil {
-			//~ infoupdate(0, &errmessage[ERROR_MPV_CONN])
-			//~ infoupdate(1, &errmessage[ERROR_HUP])
-			//~ log.Fatal(err)	
-		//~ }
-
-		//~ for _, elem := range strings.Split(string(readbuf[:n]),"\n") {
-			//~ if err := json.Unmarshal([]byte("[ "+elem+" ]"), &res); err != nil {
-				//~ continue
-			//~ }
-			//~ for _, r := range res {
-				//~ if r.Event != nil {
-					//~ rv = ""
-					//~ continue
-				//~ }
-				//~ if r.Err == "property unavailable" {
-					//~ rv = ""
-					//~ continue
-				//~ }
-				//~ if r.Err == "success"  {
-					//~ if r.Data == nil {
-						//~ rv = ""
-					//~ } else {
-						//~ rv = *r.Data
-					//~ }
-				//~ }
-			//~ }
-		//~ }
-		//~ if n < mpvIRCbuffsize {
-			//~ break
-		//~ }
-	//~ }
-	//~ return rv
-//~ }
 
 func recv_title(socket net.Listener) {
 	var stmp string
@@ -669,8 +575,8 @@ func main() {
 						select_btn_repeat_count++
 						fallthrough
 						
-					case (btn_station_select):
-						if mpv_playing_now() == true {
+					case btn_station_select:
+						if radio_enable {
 							radio_stop()
 						} else {
 							tune()
