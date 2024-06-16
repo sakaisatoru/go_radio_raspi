@@ -29,6 +29,7 @@ const (
 	MPVOPTION5     string = "--stream-buffer-size=256KiB"
 	MPVOPTION6	   string = "--script=/home/pi/bin/title_trigger.lua"
 	mpvIRCbuffsize int = 1024
+	RADIO_SOCKET_PATH string = "/run/mpvradio"
 )
 
 type ButtonCode int
@@ -428,7 +429,7 @@ func main() {
 												MPVOPTION3, MPVOPTION4, 
 												MPVOPTION5, MPVOPTION6)
 	
-	radiosocket, err := net.Listen("unix", "/run/mpvradio")
+	radiosocket, err := net.Listen("unix", RADIO_SOCKET_PATH)
 	if err != nil {
 		infoupdate(0, &errmessage[ERROR_SOCKET_NOT_OPEN])
 		infoupdate(1, &errmessage[ERROR_HUP])
@@ -458,6 +459,14 @@ func main() {
 					//~ infoupdate(0, &stmp)
 				case syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGINT:
 					err = mpvprocess.Process.Kill()
+					if err != nil {
+						log.Println(err)
+					}
+					err = os.Remove(MPV_SOCKET_PATH)
+					if err != nil {
+						log.Println(err)
+					}
+					err = os.Remove(RADIO_SOCKET_PATH)
 					if err != nil {
 						log.Println(err)
 					}
@@ -541,6 +550,7 @@ func main() {
 					case btn_system_shutdown|btn_station_repeat:
 						stmp := "shutdown now    "
 						infoupdate(0, &stmp)
+						rpio.Pin(23).Low()
 						time.Sleep(700*time.Millisecond)
 						cmd := exec.Command("/usr/bin/sudo", "/usr/sbin/poweroff")
 						cmd.Run()
