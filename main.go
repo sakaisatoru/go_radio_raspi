@@ -17,6 +17,7 @@ import (
 	"github.com/davecheney/i2c"
 	"github.com/stianeikeland/go-rpio/v4"
 	"local.packages/aqm1602y"
+	"local.packages/netradio"
 )
 
 const (
@@ -290,25 +291,34 @@ func btninput(code chan<- ButtonCode) {
 }
 
 func tune() {
+	var (
+		station_url string
+		err error = nil
+	)
+	
 	infoupdate(0, &stlist[pos].name)
 	
 	args := strings.Split(stlist[pos].url, "/")
 	if args[0] == "plugin:" {
-		cmd := exec.Command("/usr/local/share/mpvradio/plugins/"+args[1], args[2])
-		err := cmd.Run()
+		switch args[1] {
+			case "afn.py":
+				station_url, err = netradio.AFN_get_url_with_api(args[2])
+			case "radiko.py":
+				station_url, err = netradio.Radiko_get_url(args[2])
+			default:
+				break
+		}
 		if err != nil {
-			infoupdate(0, &errmessage[ERROR_TUNING])
-			radio_enable = false
-		} else {
-			rpio.Pin(23).High()		// AF amp enable
-			radio_enable = true
+			return 
 		}
 	} else {
-		s := fmt.Sprintf("{\"command\": [\"loadfile\",\"%s\"]}\x0a", stlist[pos].url)
-		mpv_send(s)
-		rpio.Pin(23).High()		// AF amp enable
-		radio_enable = true
+		station_url = stlist[pos].url
 	}
+
+	s := fmt.Sprintf("{\"command\": [\"loadfile\",\"%s\"]}\x0a", station_url)
+	mpv_send(s)
+	rpio.Pin(23).High()		// AF amp enable
+	radio_enable = true
 }
 
 func radio_stop() {
@@ -423,7 +433,7 @@ func main() {
 	defer i2c.Close()
 	oled = aqm1602y.New(i2c)
 	oled.Configure()
-	oled.PrintWithPos(0, 0, []byte("radio"))
+	oled.PrintWithPos(0, 0, []byte("radio v1.1"))
 
 	mpvprocess = exec.Command("/usr/bin/mpv", 	MPVOPTION1, MPVOPTION2, 
 												MPVOPTION3, MPVOPTION4, 
