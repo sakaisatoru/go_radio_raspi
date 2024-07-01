@@ -12,8 +12,6 @@ import (
 	"net"
 	"time"
 	"sync"
-	//~ "bytes"
-	//~ "encoding/json"
 	"github.com/davecheney/i2c"
 	"github.com/stianeikeland/go-rpio/v4"
 	"local.packages/aqm1602y"
@@ -116,7 +114,7 @@ var (
 						"socket not open."}
 )
 
-func setup_station_list () {
+func setup_station_list() int {
 	file, err := os.Open(stationlist)
 	if err != nil {
 		log.Fatal(err)
@@ -145,6 +143,7 @@ func setup_station_list () {
 			}
 		}
 	}
+	return len(stlist)
 }
 
 func mpv_send(s string) {
@@ -152,9 +151,9 @@ func mpv_send(s string) {
 	for {
 		n, err := mpv.Read(readbuf)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
+			break
 		}
-		//~ fmt.Println(string(readbuf[:n]))
 		if n < mpvIRCbuffsize {
 			break
 		}
@@ -207,7 +206,6 @@ func btninput(code chan<- ButtonCode) {
 		log.Fatal(err)
 	}
 	defer rpio.Close()
-	//~ btnscan := []rpio.Pin{26, 5, 22, 6, 17, 27}
 	btnscan := []rpio.Pin{26, 5, 6, 22, 17, 27}
 	for _, sn := range(btnscan) {
 		sn.Input()
@@ -222,22 +220,21 @@ func btninput(code chan<- ButtonCode) {
 	btn_h := btn_station_none
 	
 	re_table := []int8{0,1,-1,0,-1,0,0,1,1,0,0,-1,0,-1,1,0}
-	re_count := 0
+	var re_count uint8 = 0
 
 	for {
 		time.Sleep(10*time.Millisecond)
 		// ロータリーエンコーダ
-		retmp := (uint8(btnscan[5].Read())<<1) | uint8(btnscan[4].Read())
-		re_count = (re_count << 2) + int(retmp)
+		re_count = (re_count << 2) + (uint8(btnscan[5].Read())<<1) | uint8(btnscan[4].Read())
 		n := re_table[re_count & 15]
 		if n != 0 {
 			volume += n
-			if volume > 100 {
-				volume = 100
-			} else if volume < 1 {
-				volume = 1
+			if volume > 99 {
+				volume = 99
+			} else if volume < 0 {
+				volume = 0
 			}
-			mpv_setvol (volume)
+			mpv_setvol(volume)
 		}
 
 		switch btn_h {
@@ -251,8 +248,7 @@ func btninput(code chan<- ButtonCode) {
 					}
 				}
 
-			// もし過去になにか押されていたら、現在それがどうなっているか
-			// 調べる
+			// もし過去になにか押されていたら、現在それがどうなっているか調べる
 			default:
 				for i, sn := range(btnscan[:btn_station_select]) {
 					if btn_h == ButtonCode(i+1) {
@@ -328,26 +324,20 @@ func radio_stop() {
 	radio_enable = false
 }
 
-func alarm_time_inc () {
+func alarm_time_inc() {
 	if alarm_set_pos == 0 {
-		// hour
 		alarm_time = alarm_time.Add(1*time.Hour)
 	} else {
-		// minute
 		alarm_time = alarm_time.Add(1*time.Minute)
 	}
-	alarm_time = time.Date(2009, 1, 1, alarm_time.Hour(), alarm_time.Minute(), 0, 0, time.UTC)
 }
 
-func alarm_time_dec () {
+func alarm_time_dec() {
 	if alarm_set_pos == 1 {
-		// minute
 		// 時間が進んでしまうのでhourも補正する
 		alarm_time = alarm_time.Add(59*time.Minute)
 	}
-	// hour
 	alarm_time = alarm_time.Add(23*time.Hour)
-	alarm_time = time.Date(2009, 1, 1, alarm_time.Hour(), alarm_time.Minute(), 0, 0, time.UTC)
 }
 
 func showclock() {
@@ -371,11 +361,10 @@ func showclock() {
 	} else {
 		s0 = "      "
 	}
-	
-	s2 := fmt.Sprintf("%02d%c%02d", time.Now().Hour(),
-									display_colon[colon],
-										time.Now().Minute())
-	s := fmt.Sprintf("%s %c   %s", s0, display_sleep[clock_mode & 2], s2)
+	n := time.Now()
+	s := fmt.Sprintf("%s %c   %02d%c%02d", s0, 
+							display_sleep[clock_mode & 2], 
+							n.Hour(), display_colon[colon], n.Minute())
 	oled.PrintWithPos(0, 1, []byte(s))
 	
 	// １行目の表示
@@ -391,12 +380,11 @@ func showclock() {
 	}
 }
 
-
 func recv_title(socket net.Listener) {
 	var stmp string
 	buf := make([]byte, 1024)
 	for {
-		n := func () int {
+		n := func() int {
 			conn, err := socket.Accept()
 			if err != nil {
 				return 0
@@ -433,7 +421,7 @@ func main() {
 	defer i2c.Close()
 	oled = aqm1602y.New(i2c)
 	oled.Configure()
-	oled.PrintWithPos(0, 0, []byte("radio v1.1"))
+	oled.PrintWithPos(0, 0, []byte("radio v1.11"))
 
 	mpvprocess = exec.Command("/usr/bin/mpv", 	MPVOPTION1, MPVOPTION2, 
 												MPVOPTION3, MPVOPTION4, 
@@ -458,12 +446,11 @@ func main() {
 	go func() {
 		// shutdown this program
 		signals := make(chan os.Signal, 1)
-		//~ signal.Notify(signals, syscall.SIGUSR1, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGINT)
-		signal.Notify(signals, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGINT)
+		signal.Notify(signals, syscall.SIGTERM, syscall.SIGQUIT, 
+					syscall.SIGHUP, syscall.SIGINT) // syscall.SIGUSR1
 		
 		for {
-			s := <-signals
-			switch s {
+			switch <-signals {
 				//~ case syscall.SIGUSR1:
 					//~ stmp := stlist[pos].name + "  " + mpv_get_title ()
 					//~ infoupdate(0, &stmp)
@@ -488,8 +475,7 @@ func main() {
 		}
 	}()
 	
-	setup_station_list()
-	stlen := len(stlist)
+	stlen := setup_station_list()
 
 	for i := 0; ;i++ {
 		mpv, err = net.Dial("unix", MPV_SOCKET_PATH);
@@ -510,13 +496,10 @@ func main() {
 	radio_enable = false
 	pos = 0
 	volume = 60
-	mpv_setvol (volume)
+	mpv_setvol(volume)
 	colon = 0
 	clock_mode = clock_mode_normal
 	
-	select_btn_repeat_count := 0
-
-	mode_btn_repeat_count := 0
 	alarm_set_mode = false
 	alarm_set_pos = 0
 	alarm_time = time.Unix(0, 0).UTC()
@@ -535,16 +518,18 @@ func main() {
 				if alarm_set_mode == false {
 					if (clock_mode & clock_mode_alarm) != 0 {
 						// アラーム
-						if alarm_time.Hour() == time.Now().Hour() &&
-						   alarm_time.Minute() == time.Now().Minute() {
+						n := time.Now()
+						if alarm_time.Hour() == n.Hour() &&
+						   alarm_time.Minute() == n.Minute() {
 							clock_mode ^= clock_mode_alarm
 							tune()
 						}
 					}
 					if (clock_mode & clock_mode_sleep) != 0 {
 						// スリープ
-						if tuneoff_time.Hour() == time.Now().Hour() &&
-						   tuneoff_time.Minute() == time.Now().Minute() {
+						n := time.Now()
+						if tuneoff_time.Hour() == n.Hour() &&
+						   tuneoff_time.Minute() == n.Minute() {
 							clock_mode ^= clock_mode_sleep
 							radio_stop()
 						}
@@ -583,17 +568,12 @@ func main() {
 						}
 						
 					case (btn_station_mode|btn_station_repeat):
-						// alarm set
-						mode_btn_repeat_count++
-						if mode_btn_repeat_count > 3 {
-							// アラーム時刻の設定へ
-							alarm_set_mode = true
-							alarm_set_pos = 0
-						}
+						// アラーム時刻の設定
+						alarm_set_mode = true
+						alarm_set_pos = 0
 						
 					case (btn_station_select|btn_station_repeat):
-						select_btn_repeat_count++
-						fallthrough
+						// 割当なし
 						
 					case btn_station_select:
 						if radio_enable {
@@ -604,18 +584,14 @@ func main() {
 						
 					case btn_station_repeat_end:
 						if alarm_set_mode == false {
-							if select_btn_repeat_count == 0 && mode_btn_repeat_count == 0 { 
-								tune()
-							}
+							tune()
 						}
-						select_btn_repeat_count = 0
-						mode_btn_repeat_count = 0
 						
 					case (btn_station_next|btn_station_repeat):
 						if alarm_set_mode {
 							// アラーム設定時は時刻設定を行う
 							// リピート時の表示が追いつかないのでここでも表示する
-							alarm_time_inc ()
+							alarm_time_inc()
 							showclock()
 						} else {
 							if pos < stlen -1 {
@@ -627,7 +603,7 @@ func main() {
 					case btn_station_next:
 						if alarm_set_mode {
 							// アラーム設定時は時刻設定を行う
-							alarm_time_inc ()
+							alarm_time_inc()
 						} else {
 							if pos < stlen -1 {
 								pos++
@@ -639,7 +615,7 @@ func main() {
 						if alarm_set_mode {
 							// アラーム設定時は時刻設定を行う
 							// リピート時の表示が追いつかないのでここでも表示する
-							alarm_time_dec ()
+							alarm_time_dec()
 							showclock()
 						} else {
 							if pos > 0 {
@@ -651,7 +627,7 @@ func main() {
 					case btn_station_prior:
 						if alarm_set_mode {
 							// アラーム設定時は時刻設定を行う
-							alarm_time_dec ()
+							alarm_time_dec()
 						} else {
 							if pos > 0 {
 								pos--
