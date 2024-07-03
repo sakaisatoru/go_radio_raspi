@@ -161,13 +161,16 @@ func mpv_send(s string) {
 }
 
 var (
-	volconv = []int8{	0,1,2,3,4,4,5,6,6,7,7,8,8,9,9,10,10,11,11,
-						11,12,12,13,13,13,14,14,14,15,15,16,16,16,17,
-						17,17,18,18,18,19,19,20,20,20,21,21,22,22,23,
-						23,24,24,25,25,26,26,27,27,28,28,29,30,30,31,
-						32,32,33,34,35,35,36,37,38,39,40,41,42,43,45,
-						46,47,49,50,52,53,55,57,59,61,63,66,68,71,74,
-						78,81,85,90,95,100}
+	volconv = []int8{	// 0, 1, 2, 3, 4, 4, 5, 6, 6, 7, 
+						// 7, 8, 8, 9, 9,10,10,11,11,11,
+						//12,12,13,13,13,14,14,14,15,15,
+						//16,16,16,17,17,17,18,18,18,19,
+						//19,20,20,20,21,21,22,22,23,23,
+						 0,24,25,25,26,26,27,27,28,28,
+						29,30,30,31,32,32,33,34,35,35,
+						36,37,38,39,40,41,42,43,45,46,
+						47,49,50,52,53,55,57,59,61,63,
+						66,68,71,74,78,81,85,90,95,100}
 )
 
 func mpv_setvol(vol int8) {
@@ -219,18 +222,65 @@ func btninput(code chan<- ButtonCode) {
 	hold := 0
 	btn_h := btn_station_none
 	
-	re_table := []int8{0,1,-1,0,-1,0,0,1,1,0,0,-1,0,-1,1,0}
-	var re_count uint8 = 0
-
+	//~ re_table := []int8{0,1,-1,0,-1,0,0,1,1,0,0,-1,0,-1,1,0}
+	//~ var re_count uint8 = 0
+	var n int8
+	
 	for {
 		time.Sleep(10*time.Millisecond)
 		// ロータリーエンコーダ
-		re_count = (re_count << 2) + (uint8(btnscan[5].Read())<<1) | uint8(btnscan[4].Read())
-		n := re_table[re_count & 15]
+		//~ re_count = (re_count << 2) + (uint8(btnscan[5].Read())<<1) | uint8(btnscan[4].Read())
+		//~ n := re_table[re_count & 15]
+
+		b4 := btnscan[5].Read()
+		b3 := btnscan[4].Read()
+		//~ b3 ^= b4	// 0,1,3,2 -> 0,1,2,3
+		n = 0
+		switch (b4 << 1 | b3) {
+			case 0:
+				if btnscan[5].EdgeDetected() {
+					n += 1
+				}
+				if btnscan[4].EdgeDetected() {
+					n += -1
+				}
+				btnscan[4].Detect(rpio.RiseEdge)
+				btnscan[5].Detect(rpio.RiseEdge)
+			case 1:
+				if btnscan[4].EdgeDetected() {
+					n += 1
+				}
+				if btnscan[5].EdgeDetected() {
+					n += -1
+				}
+				btnscan[5].Detect(rpio.RiseEdge)
+				btnscan[4].Detect(rpio.FallEdge)
+			//~ case 2:
+			case 3:
+				if btnscan[5].EdgeDetected() {
+					n += 1
+				}
+				if btnscan[4].EdgeDetected() {
+					n += -1
+				}
+				btnscan[4].Detect(rpio.FallEdge)
+				btnscan[5].Detect(rpio.FallEdge)
+			//~ case 3:
+			case 2:
+				if btnscan[4].EdgeDetected() {
+					n += 1
+				}
+				if btnscan[5].EdgeDetected() {
+					n += -1
+				}
+				btnscan[5].Detect(rpio.FallEdge)
+				btnscan[4].Detect(rpio.RiseEdge)
+		}
+
 		if n != 0 {
 			volume += n
-			if volume > 99 {
-				volume = 99
+			if volume > 49 {
+				volume = 49
 			} else if volume < 0 {
 				volume = 0
 			}
@@ -495,7 +545,7 @@ func main() {
 	
 	radio_enable = false
 	pos = 0
-	volume = 60
+	volume = 10
 	mpv_setvol(volume)
 	colon = 0
 	clock_mode = clock_mode_normal
