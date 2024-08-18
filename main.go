@@ -564,7 +564,6 @@ func main() {
 	btncode := make(chan ButtonCode)
 	display_buff = ""
 	display_buff_pos = 0
-	//~ re_passcount := 0
 	
 	go btninput(btncode)
 	go recv_title(radiosocket)
@@ -603,8 +602,8 @@ func main() {
 					case btn_station_re_forward:
 						if radio_enable {
 							volume++
-							if volume > 99 { // 49
-								volume = 99 // 49
+							if volume > 99 { 
+								volume = 99 
 							}
 							mpv_setvol(volume)
 						}
@@ -681,10 +680,12 @@ func main() {
 							// アラーム設定時は時刻設定を行う
 							alarm_time_inc()
 						} else {
-							if pos < stlen -1 {
-								pos++
-								tune()
+							if radio_enable == true {
+								if pos < stlen -1 {
+									pos++
+								}
 							}
+							tune()
 						}
 
 					case (btn_station_prior|btn_station_repeat):
@@ -705,10 +706,12 @@ func main() {
 							// アラーム設定時は時刻設定を行う
 							alarm_time_dec()
 						} else {
-							if pos > 0 {
-								pos--
-								tune()
+							if radio_enable == true {
+								if pos > 0 {
+									pos--
+								}
 							}
+							tune()
 						}
 				}
 		}
