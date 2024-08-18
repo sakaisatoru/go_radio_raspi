@@ -162,15 +162,15 @@ func mpv_send(s string) {
 }
 
 var (
-	volconv = []int8{	// 0, 1, 2, 3, 4, 4, 5, 6, 6, 7, 
-						// 7, 8, 8, 9, 9,10,10,11,11,11,
-						//12,12,13,13,13,14,14,14,15,15,
-						//16,16,16,17,17,17,18,18,18,19,
-						//19,20,20,20,21,21,22,22,23,23,
-						 0,24,25,25,26,26,27,27,28,28,
-						29,30,30,31,32,32,33,34,35,35,
-						36,37,38,39,40,41,42,43,45,46,
-						47,49,50,52,53,55,57,59,61,63,
+	volconv = []int8{	 0, 1, 2, 3, 4, 4, 5, 6, 6,  7, 
+						 7, 8, 8, 9, 9,10,10,11,11, 11,
+						12,12,13,13,13,14,14,14,15, 15,
+						16,16,16,17,17,17,18,18,18, 19,
+						19,20,20,20,21,21,22,22,23, 23,
+						24,24,25,25,26,26,27,27,28, 28,
+						29,30,30,31,32,32,33,34,35, 35,
+						36,37,38,39,40,41,42,43,45, 46,
+						47,49,50,52,53,55,57,59,61, 63,
 						66,68,71,74,78,81,85,90,95,100}
 )
 
@@ -313,6 +313,18 @@ func btninput(code chan<- ButtonCode) {
 						break
 					}
 				}
+		}
+	}
+}
+
+func radiko_setup() {
+	for _, st := range stlist {
+		args := strings.Split(st.url, "/")
+		if args[0] == "plugin:" {
+			if args[1] == "radiko.py" {
+				_, _ = netradio.Radiko_get_url(args[2])
+				break
+			}
 		}
 	}
 }
@@ -466,7 +478,7 @@ func main() {
 	defer i2c.Close()
 	oled = aqm1602y.New(i2c)
 	oled.Configure()
-	oled.PrintWithPos(0, 0, []byte("radio v1.13"))
+	oled.PrintWithPos(0, 0, []byte("radio v1.14"))
 
 	mpvprocess = exec.Command("/usr/bin/mpv", 	MPVOPTION1, MPVOPTION2, 
 												MPVOPTION3, MPVOPTION4, 
@@ -520,7 +532,8 @@ func main() {
 	}()
 	
 	stlen := setup_station_list()
-
+	go radiko_setup()
+	
 	for i := 0; ;i++ {
 		mpv, err = net.Dial("unix", MPV_SOCKET_PATH);
 		if err == nil {
@@ -539,7 +552,7 @@ func main() {
 	
 	radio_enable = false
 	pos = 0
-	volume = 10
+	volume = 60
 	mpv_setvol(volume)
 	colon = 0
 	clock_mode = clock_mode_normal
@@ -590,23 +603,11 @@ func main() {
 					case btn_station_re_forward:
 						if radio_enable {
 							volume++
-							if volume > 49 {
-								volume = 49
+							if volume > 99 { // 49
+								volume = 99 // 49
 							}
 							mpv_setvol(volume)
 						}
-						//~ } else {
-							//~ re_passcount++
-							//~ if re_passcount > 2 {
-								//~ re_passcount = 0
-								//~ // radio が鳴っていなければ 選局操作を行う
-								//~ pos++
-								//~ if pos >= stlen {
-									//~ pos = 0
-								//~ }
-								//~ infoupdate(0, &stlist[pos].name)
-							//~ }
-						//~ }
 						
 					case btn_station_re_backward:
 						if radio_enable {
@@ -616,18 +617,6 @@ func main() {
 							}
 							mpv_setvol(volume)
 						}
-						//~ } else {
-							//~ re_passcount++
-							//~ if re_passcount > 2 {
-								//~ re_passcount = 0
-								//~ // radio が鳴っていなければ 選局操作を行う
-								//~ pos--
-								//~ if pos < 0 {
-									//~ pos = stlen - 1
-								//~ }
-								//~ infoupdate(0, &stlist[pos].name)
-							//~ }
-						//~ }
 					
 					case btn_system_shutdown|btn_station_repeat:
 						stmp := "shutdown now    "
