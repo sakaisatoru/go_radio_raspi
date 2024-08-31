@@ -98,8 +98,8 @@ var (
 	display_colon = []uint8{' ',':'}
 	display_sleep = []uint8{' ',' ','S'}
 	display_buff string
-	display_buff_len int8
-	display_buff_pos int8
+	display_buff_len int16
+	display_buff_pos int16
 	clock_mode uint8
 	alarm_time time.Time
 	tuneoff_time time.Time
@@ -187,7 +187,7 @@ func mpv_setvol(vol int8) {
 func infoupdate(line uint8, mes *string) {
 	mu.Lock()
 	defer mu.Unlock()
-	display_buff_len = int8(len(*mes))
+	display_buff_len = int16(len(*mes))
 	display_buff_pos = 0
 	if display_buff_len >= 17 {
 		if line == 0 {
@@ -417,7 +417,7 @@ func showclock() {
 	} else {
 		oled.PrintWithPos(0, 0, []byte(display_buff)[display_buff_pos:display_buff_pos+17])
 		display_buff_pos++
-		if display_buff_pos >= int8(display_buff_len + 2) {
+		if display_buff_pos >= int16(display_buff_len + 2) {
 			display_buff_pos = 0
 		} 
 	}
@@ -425,7 +425,7 @@ func showclock() {
 
 func recv_title(socket net.Listener) {
 	var stmp string
-	buf := make([]byte, 1024)
+	buf := make([]byte, mpvIRCbuffsize)
 	for {
 		n := func() int {
 			conn, err := socket.Accept()
@@ -439,7 +439,7 @@ func recv_title(socket net.Listener) {
 				if err != nil {
 					return 0
 				}
-				if n < 1024 {
+				if n < mpvIRCbuffsize {
 					break
 				}
 			}
