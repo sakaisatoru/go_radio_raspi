@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"context"
 	"os"
+	"strings"
 	"github.com/carlmjohnson/requests"
 	"net/http"
 	"encoding/base64"
@@ -11,10 +12,16 @@ import (
 	"regexp"
 )
 
+type StationInfo struct {
+	Name string
+	Url string
+}
+
 const (
 	auth_key string = "bcd151073c03b352e1ef2fd66c32209da9ca0afa" // 現状は固有 key_lenght = 0
 	tokenfile string = "/run/radiko_token"
 )
+
 
 func gen_temp_chunk_m3u8_url(url string, auth_token string) (string, error) {
 	var (
@@ -135,3 +142,14 @@ exit_this:
 	return chunkurl, err
 }
 
+func Radiko_setup(stlist []*StationInfo) {
+	for _, st := range stlist {
+		args := strings.Split(st.Url, "/")
+		if args[0] == "plugin:" {
+			if args[1] == "radiko.py" {
+				_, _ = Radiko_get_url(args[2])
+				break
+			}
+		}
+	}
+}
