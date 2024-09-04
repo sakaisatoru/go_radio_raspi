@@ -23,6 +23,7 @@ const (
 	stationlist string = "/usr/local/share/mpvradio/playlists/radio.m3u"
 	MPV_SOCKET_PATH string = "/run/mpvsocket"
 	RADIO_SOCKET_PATH string = "/run/mpvradio"
+	VERSIONMESSAGE string = "Radio Ver 1.21"
 )
 
 const (
@@ -33,6 +34,27 @@ const (
 	state_alarm_min_set				//
 	statelength
 )
+
+type stateEventhandlersDefault struct {
+	__re_cw				func()
+	__re_ccw				func()
+	
+	__btn_select_click		func()
+	__btn_select_press		func()
+	
+	__btn_mode_click		func()
+	__btn_mode_press		func()
+	__btn_mode_release		func()
+
+	__btn_next_click		func()
+	__btn_next_repeat		func()
+	__btn_next_release		func()
+
+	__btn_prior_click		func()
+	__btn_prior_repeat		func()
+	__btn_prior_release	func()
+	
+} 
 
 type stateEventhandlers struct {
 	cb_re_cw				func()
@@ -71,7 +93,7 @@ const (
 	btn_station_repeat_end = 0x80
 	btn_system_shutdown = 0x81
 	
-	btn_press_width int = 15
+	btn_press_width int = 30
 	btn_press_long_width int = 90
 )
 
@@ -98,6 +120,7 @@ var (
 	oled aqm1602y.AQM1602Y
 	mu sync.Mutex
 	stlist []*netradio.StationInfo
+	stlen int
 	colon uint8 = 0
 	pos int = 0
 	radio_enable bool = false
@@ -120,11 +143,11 @@ var (
 	btnscan = []rpio.Pin{26, 5, 6, 22, 17, 27}
 	state_cdx int = state_normal_mode
 	state_event = [statelength]stateEventhandlers {
-		{func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {}},
-		{func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {}},
-		{func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {}},
-		{func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {}},
-		{func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {},func() {}},
+		{inc_volume, dec_volume, toggle_radio, func() {},func() {},func() {},func() {},	next_tune, next_station_repeat, tune, prior_tune, prior_station_repeat, tune},
+		{inc_volume, dec_volume, toggle_radio, func() {},func() {},func() {},func() {},	next_tune, next_station_repeat, tune, prior_tune, prior_station_repeat, tune},
+		{inc_volume, dec_volume, toggle_radio, func() {},func() {},func() {},func() {},	next_tune, next_station_repeat, tune, prior_tune, prior_station_repeat, tune},
+		{inc_volume, dec_volume, toggle_radio, func() {},func() {},func() {},func() {},	next_tune, next_station_repeat, tune, prior_tune, prior_station_repeat, tune},
+		{inc_volume, dec_volume, toggle_radio, func() {},func() {},func() {},func() {},	next_tune, next_station_repeat, tune, prior_tune, prior_station_repeat, tune},
 	} 
 )
 
@@ -163,9 +186,8 @@ func setup_station_list() int {
 func infoupdate(line uint8, mes *string) {
 	mu.Lock()
 	defer mu.Unlock()
-	display_buff_len := len(*mes)
 	display_buff_pos = 0
-	if display_buff_len >= 17 {
+	if len(*mes) >= 17 {
 		if line == 0 {
 			display_buff = *mes + "  " + *mes
 		}
@@ -369,13 +391,14 @@ func showclock() {
 	
 	// １行目の表示
 	// 文字列があふれる場合はスクロールする
+	// display_buff = *mes + "  " + *mes であることを前提としている
 	display_buff_len := len(display_buff)
 	if display_buff_len <= 16 {
 		oled.PrintWithPos(0, 0, []byte(display_buff))
 	} else {
 		oled.PrintWithPos(0, 0, []byte(display_buff)[display_buff_pos:display_buff_pos+17])
 		display_buff_pos++
-		if display_buff_pos >= int16(display_buff_len + 2) {
+		if display_buff_pos >= int16((display_buff_len/2)+1) {
 			display_buff_pos = 0
 		} 
 	}
@@ -413,6 +436,66 @@ func recv_title(socket net.Listener) {
 	}
 }
 
+func inc_volume() {
+	if radio_enable {
+		volume++
+		if volume > 99 { 
+			volume = 99 
+		}
+		mpvctl.Setvol(volume)
+	}
+}
+	
+func dec_volume() {
+	if radio_enable {
+		volume--
+		if volume < 0 {
+			volume = 0
+		}
+		mpvctl.Setvol(volume)
+	}
+}
+
+func toggle_radio() {
+	if radio_enable {
+		mpvctl.Stop()
+	} else {
+		tune()
+	}
+}
+
+func next_tune() {
+	if radio_enable == true {
+		if pos < stlen -1 {
+			pos++
+		}
+	}
+	tune()
+}
+
+func next_station_repeat() {
+	if pos < stlen -1 {
+		pos++
+		infoupdate(0, &stlist[pos].Name)
+	}	
+}
+
+func prior_tune() {
+	if radio_enable == true {
+		if pos > 0 {
+			pos--
+		}
+	}
+	tune()
+}
+
+func prior_station_repeat() {
+	if pos > 0 {
+		pos--
+		infoupdate(0, &stlist[pos].Name)
+	}
+}
+
 func main() {
 	if err := rpio.Open();err != nil {
 		infoupdate(0, &errmessage[ERROR_RPIO_NOT_OPEN])
@@ -436,7 +519,7 @@ func main() {
 	defer i2c.Close()
 	oled = aqm1602y.New(i2c)
 	oled.Configure()
-	oled.PrintWithPos(0, 0, []byte("radio v1.20"))
+	oled.PrintWithPos(0, 0, []byte(VERSIONMESSAGE))
 
 	radiosocket, err := net.Listen("unix", RADIO_SOCKET_PATH)
 	if err != nil {
@@ -486,7 +569,7 @@ func main() {
 		}
 	}()
 	
-	stlen := setup_station_list()
+	stlen = setup_station_list()
 	go netradio.Radiko_setup(stlist)
 	
 	if mpvctl.Open(MPV_SOCKET_PATH) != nil {
@@ -504,31 +587,6 @@ func main() {
 	
 	
 	// radio
-	state_event[state_normal_mode].cb_re_cw 				 = func() {
-		if radio_enable {
-			volume++
-			if volume > 99 { 
-				volume = 99 
-			}
-			mpvctl.Setvol(volume)
-		}
-	}
-	state_event[state_normal_mode].cb_re_ccw 				 = func() {
-		if radio_enable {
-			volume--
-			if volume < 0 {
-				volume = 0
-			}
-			mpvctl.Setvol(volume)
-		}
-	}
-	state_event[state_normal_mode].cb_btn_select_click		 = func() {
-		if radio_enable {
-			mpvctl.Stop()
-		} else {
-			tune()
-		}
-	}
 	state_event[state_normal_mode].cb_btn_select_press		 = func() {
 		if radio_enable {
 			mpvctl.Stop()
@@ -543,40 +601,6 @@ func main() {
 		}
 		state_cdx = state_ext_mode	// モード遷移
 	}
-	state_event[state_normal_mode].cb_btn_next_click		 = func() {
-		if radio_enable == true {
-			if pos < stlen -1 {
-				pos++
-			}
-		}
-		tune()
-	}
-	state_event[state_normal_mode].cb_btn_next_repeat		 = func() {
-		if pos < stlen -1 {
-			pos++
-			infoupdate(0, &stlist[pos].Name)
-		}	
-	}
-	state_event[state_normal_mode].cb_btn_next_release		 = func() {
-		tune()
-	}
-	state_event[state_normal_mode].cb_btn_prior_click		 = func() {
-		if radio_enable == true {
-			if pos > 0 {
-				pos--
-			}
-		}
-		tune()
-	}
-	state_event[state_normal_mode].cb_btn_prior_repeat		 = func() {
-		if pos > 0 {
-			pos--
-			infoupdate(0, &stlist[pos].Name)
-		}
-	}
-	state_event[state_normal_mode].cb_btn_prior_release	     = func() {
-		tune()
-	}
 
 	// alarm, sleep 切り替え
 	state_event[state_ext_mode].cb_btn_mode_click		 	 = func() {
@@ -587,13 +611,14 @@ func main() {
 			tuneoff_time = time.Now().Add(30*time.Minute)
 		}
 	}
+	state_event[state_ext_mode].cb_btn_mode_release = state_event[state_ext_mode].cb_btn_mode_click
+
 	state_event[state_ext_mode].cb_btn_mode_press		 	 = func() {
 		state_cdx = state_alarm_hour_set	// アラーム時の設定へ遷移
 	}
-	state_event[state_ext_mode].cb_re_cw = state_event[state_normal_mode].cb_re_cw 
-	state_event[state_ext_mode].cb_re_ccw = state_event[state_normal_mode].cb_re_ccw 
 	state_event[state_ext_mode].cb_btn_next_click			 = func() {
 		state_cdx = state_normal_mode
+		state_event[state_cdx].cb_btn_next_click()
 	}
 	state_event[state_ext_mode].cb_btn_next_repeat 			 = func() {
 		state_cdx = state_normal_mode
@@ -605,6 +630,7 @@ func main() {
 	}
 	state_event[state_ext_mode].cb_btn_prior_click			 = func() {
 		state_cdx = state_normal_mode
+		state_event[state_cdx].cb_btn_prior_click()
 	}
 	state_event[state_ext_mode].cb_btn_prior_repeat 		 = func() {
 		state_cdx = state_normal_mode
@@ -615,8 +641,9 @@ func main() {
 		state_event[state_cdx].cb_btn_prior_release()
 	}
 
-	// bt spealer
+	// bt spealer mode
 	state_event[state_aux].cb_btn_next_click				 = func() {
+		// ここにbtを止める処理を置く
 		state_event[state_aux].cb_btn_select_click()
 		tune()
 	}
@@ -647,8 +674,6 @@ func main() {
 		alarm_time_dec()
 		showclock() // 表示が追いつかないのでここでも更新する
 	}
-	state_event[state_alarm_hour_set].cb_re_cw = state_event[state_normal_mode].cb_re_cw 
-	state_event[state_alarm_hour_set].cb_re_ccw = state_event[state_normal_mode].cb_re_ccw 
 
 
 	state_event[state_alarm_min_set].cb_btn_mode_click		 	 = func() {
@@ -659,8 +684,6 @@ func main() {
 	state_event[state_alarm_min_set].cb_btn_next_repeat = state_event[state_alarm_hour_set].cb_btn_next_repeat
 	state_event[state_alarm_min_set].cb_btn_prior_click = state_event[state_alarm_hour_set].cb_btn_prior_click
 	state_event[state_alarm_min_set].cb_btn_prior_repeat = state_event[state_alarm_hour_set].cb_btn_prior_repeat
-	state_event[state_alarm_min_set].cb_re_cw = state_event[state_normal_mode].cb_re_cw 
-	state_event[state_alarm_min_set].cb_re_ccw = state_event[state_normal_mode].cb_re_ccw 
 	
 	for {
 		select {
