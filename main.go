@@ -23,58 +23,55 @@ const (
 	stationlist string = "/usr/local/share/mpvradio/playlists/radio.m3u"
 	MPV_SOCKET_PATH string = "/run/mpvsocket"
 	RADIO_SOCKET_PATH string = "/run/mpvradio"
-	VERSIONMESSAGE string = "Radio Ver 1.21"
+	VERSIONMESSAGE string = "Radio Ver 1.23"
 )
 
 const (
 	state_normal_mode int = iota	// radio on/off
-	state_ext_mode					// alarm, sleep, aux 切り替え
 	state_aux						// bt spealer
 	state_alarm_hour_set			// 時刻調整中
 	state_alarm_min_set				//
 	statelength
 )
 
-type stateEventhandlersDefault struct {
-	__re_cw				func()
-	__re_ccw				func()
-	
-	__btn_select_click		func()
-	__btn_select_press		func()
-	
-	__btn_mode_click		func()
-	__btn_mode_press		func()
-	__btn_mode_release		func()
+type eventhandler struct {
+	cb func() bool
+	dflt func()
+}
 
-	__btn_next_click		func()
-	__btn_next_repeat		func()
-	__btn_next_release		func()
-
-	__btn_prior_click		func()
-	__btn_prior_repeat		func()
-	__btn_prior_release	func()
-	
-} 
+func _true() bool {
+	return true
+}
+func _false() bool {
+	return false
+}
+func _blank() {
+}
+ 
+func (m *eventhandler) do_handler() {
+	if m.cb() == true {
+		m.dflt()
+	}
+}
 
 type stateEventhandlers struct {
-	cb_re_cw				func()
-	cb_re_ccw				func()
+	re_cw				eventhandler
+	re_ccw				eventhandler
 	
-	cb_btn_select_click		func()
-	cb_btn_select_press		func()
+	btn_select_click	eventhandler
+	btn_select_press	eventhandler
 	
-	cb_btn_mode_click		func()
-	cb_btn_mode_press		func()
-	cb_btn_mode_release		func()
+	btn_mode_click		eventhandler
+	btn_mode_press		eventhandler
+	btn_mode_release	eventhandler
 
-	cb_btn_next_click		func()
-	cb_btn_next_repeat		func()
-	cb_btn_next_release		func()
+	btn_next_click		eventhandler
+	btn_next_repeat		eventhandler
+	btn_next_release	eventhandler
 
-	cb_btn_prior_click		func()
-	cb_btn_prior_repeat		func()
-	cb_btn_prior_release	func()
-	
+	btn_prior_click		eventhandler
+	btn_prior_repeat	eventhandler
+	btn_prior_release	eventhandler
 } 
 
 type ButtonCode int
@@ -124,7 +121,7 @@ var (
 	colon uint8 = 0
 	pos int = 0
 	radio_enable bool = false
-	volume int8 = 60
+	volume int8 = 30
 	display_colon = []uint8{' ',':'}
 	display_sleep = []uint8{' ',' ','S'}
 	display_buff string = ""
@@ -143,11 +140,75 @@ var (
 	btnscan = []rpio.Pin{26, 5, 6, 22, 17, 27}
 	state_cdx int = state_normal_mode
 	state_event = [statelength]stateEventhandlers {
-		{inc_volume, dec_volume, toggle_radio, func() {},func() {},func() {},func() {},	next_tune, next_station_repeat, tune, prior_tune, prior_station_repeat, tune},
-		{inc_volume, dec_volume, toggle_radio, func() {},func() {},func() {},func() {},	next_tune, next_station_repeat, tune, prior_tune, prior_station_repeat, tune},
-		{inc_volume, dec_volume, toggle_radio, func() {},func() {},func() {},func() {},	next_tune, next_station_repeat, tune, prior_tune, prior_station_repeat, tune},
-		{inc_volume, dec_volume, toggle_radio, func() {},func() {},func() {},func() {},	next_tune, next_station_repeat, tune, prior_tune, prior_station_repeat, tune},
-		{inc_volume, dec_volume, toggle_radio, func() {},func() {},func() {},func() {},	next_tune, next_station_repeat, tune, prior_tune, prior_station_repeat, tune},
+		// normal mode (radio)
+		{eventhandler{cb:_true,dflt:inc_volume}, 
+			eventhandler{cb:_true,  dflt:dec_volume}, 
+			eventhandler{cb:_true,  dflt:toggle_radio}, 
+			eventhandler{cb:_false, dflt:_blank}, 
+			
+			eventhandler{cb:_false, dflt:_blank},
+			eventhandler{cb:func() bool { state_cdx = state_alarm_hour_set; return false }, dflt:_blank}, 
+			eventhandler{cb:func() bool { state_cdx = state_alarm_hour_set; return false }, dflt:_blank}, 
+			
+			eventhandler{cb:_true,  dflt:next_tune}, 
+			eventhandler{cb:_true,  dflt:next_station_repeat}, 
+			eventhandler{cb:_true,  dflt:tune}, 
+			
+			eventhandler{cb:_true,  dflt:prior_tune}, 
+			eventhandler{cb:_true,  dflt:prior_station_repeat}, 
+			eventhandler{cb:_true,  dflt:tune}},
+		// aux (bluetooth speaker)
+		{eventhandler{cb:_true,dflt:inc_volume}, 
+			eventhandler{cb:_true,  dflt:dec_volume}, 
+			eventhandler{cb:_true,  dflt:toggle_radio}, 
+			eventhandler{cb:_false, dflt:_blank}, 
+			
+			eventhandler{cb:_false, dflt:_blank},
+			eventhandler{cb:_false, dflt:_blank}, 
+			eventhandler{cb:_false, dflt:_blank}, 
+			
+			eventhandler{cb:_false, dflt:_blank}, // 選局ボタンを抑止
+			eventhandler{cb:_false, dflt:_blank}, 
+			eventhandler{cb:_false, dflt:_blank}, 
+			
+			eventhandler{cb:_false, dflt:_blank}, // 選局ボタンを抑止 
+			eventhandler{cb:_false, dflt:_blank}, 
+			eventhandler{cb:_false, dflt:_blank}}, 
+		// set hour
+		{eventhandler{cb:_true,dflt:inc_volume}, 
+			eventhandler{cb:_true,  dflt:dec_volume}, 
+			eventhandler{cb:_true,  dflt:toggle_radio}, 
+			eventhandler{cb:_false, dflt:_blank}, 
+			
+			eventhandler{cb:_true,  dflt:func() { state_cdx = state_alarm_min_set }},	// アラーム分の設定へ遷移
+			eventhandler{cb:_true,  dflt:func() { state_cdx = state_alarm_min_set }},	
+			eventhandler{cb:_false, dflt:_blank}, 
+			
+			eventhandler{cb:func() bool { alarm_time_inc(); return false }, dflt:_blank}, 
+			eventhandler{cb:func() bool { alarm_time_inc(); return true }, dflt:showclock}, 
+			eventhandler{cb:_false, dflt:_blank}, 
+			
+			eventhandler{cb:func() bool { alarm_time_dec(); return false }, dflt:_blank}, 
+			eventhandler{cb:func() bool { alarm_time_dec(); return true }, dflt:showclock}, 
+			eventhandler{cb:_false, dflt:_blank}},
+		// set min
+		{eventhandler{cb:_true,dflt:inc_volume}, 
+			eventhandler{cb:_true,  dflt:dec_volume}, 
+			eventhandler{cb:_true,  dflt:toggle_radio}, 
+			eventhandler{cb:_false, dflt:_blank}, 
+			
+			eventhandler{cb:_true,  dflt:func() { state_cdx = state_normal_mode }},
+			eventhandler{cb:_true,  dflt:func() { state_cdx = state_normal_mode }},
+			eventhandler{cb:_false, dflt:_blank}, 
+			
+			eventhandler{cb:func() bool { alarm_time_inc(); return false }, dflt:_blank}, 
+			eventhandler{cb:func() bool { alarm_time_inc(); return true }, dflt:showclock}, 
+			eventhandler{cb:_false, dflt:_blank}, 
+			
+			eventhandler{cb:func() bool { alarm_time_dec(); return false }, dflt:_blank}, 
+			eventhandler{cb:func() bool { alarm_time_dec(); return true }, dflt:showclock}, 
+			eventhandler{cb:_false, dflt:_blank}},
+
 	} 
 )
 
@@ -439,8 +500,8 @@ func recv_title(socket net.Listener) {
 func inc_volume() {
 	if radio_enable {
 		volume++
-		if volume > 99 { 
-			volume = 99 
+		if volume > mpvctl.Volume_max { 
+			volume = mpvctl.Volume_max 
 		}
 		mpvctl.Setvol(volume)
 	}
@@ -449,8 +510,8 @@ func inc_volume() {
 func dec_volume() {
 	if radio_enable {
 		volume--
-		if volume < 0 {
-			volume = 0
+		if volume < mpvctl.Volume_min {
+			volume = mpvctl.Volume_min
 		}
 		mpvctl.Setvol(volume)
 	}
@@ -587,104 +648,36 @@ func main() {
 	
 	
 	// radio
-	state_event[state_normal_mode].cb_btn_select_press		 = func() {
+	state_event[state_normal_mode].btn_select_press.cb = func() bool {
 		if radio_enable {
 			mpvctl.Stop()
 		}
 		rpio.Pin(23).High()		// AF amp enable
 		infoupdate(0, &errmessage[BT_SPEAKER])
 		state_cdx = state_aux
-	}
-	state_event[state_normal_mode].cb_btn_mode_click		 = func() {
-		if clock_mode == 0 {
-			clock_mode = 1
-		}
-		state_cdx = state_ext_mode	// モード遷移
+		return false
 	}
 
 	// alarm, sleep 切り替え
-	state_event[state_ext_mode].cb_btn_mode_click		 	 = func() {
+	state_event[state_normal_mode].btn_mode_click.cb = func() bool {
 		clock_mode++
 		clock_mode &= 3
 		if (clock_mode & clock_mode_sleep) != 0 {
 			// スリープ時刻の設定を行う
 			tuneoff_time = time.Now().Add(30*time.Minute)
 		}
-	}
-	state_event[state_ext_mode].cb_btn_mode_release = state_event[state_ext_mode].cb_btn_mode_click
-
-	state_event[state_ext_mode].cb_btn_mode_press		 	 = func() {
-		state_cdx = state_alarm_hour_set	// アラーム時の設定へ遷移
-	}
-	state_event[state_ext_mode].cb_btn_next_click			 = func() {
-		state_cdx = state_normal_mode
-		state_event[state_cdx].cb_btn_next_click()
-	}
-	state_event[state_ext_mode].cb_btn_next_repeat 			 = func() {
-		state_cdx = state_normal_mode
-		state_event[state_cdx].cb_btn_next_repeat()
-	} 
-	state_event[state_ext_mode].cb_btn_next_release  		 = func() {
-		state_cdx = state_normal_mode
-		state_event[state_cdx].cb_btn_next_release()
-	}
-	state_event[state_ext_mode].cb_btn_prior_click			 = func() {
-		state_cdx = state_normal_mode
-		state_event[state_cdx].cb_btn_prior_click()
-	}
-	state_event[state_ext_mode].cb_btn_prior_repeat 		 = func() {
-		state_cdx = state_normal_mode
-		state_event[state_cdx].cb_btn_prior_repeat()
-	} 
-	state_event[state_ext_mode].cb_btn_prior_release  		 = func() {
-		state_cdx = state_normal_mode
-		state_event[state_cdx].cb_btn_prior_release()
+		return false
 	}
 
-	// bt spealer mode
-	state_event[state_aux].cb_btn_next_click				 = func() {
-		// ここにbtを止める処理を置く
-		state_event[state_aux].cb_btn_select_click()
-		tune()
-	}
-	state_event[state_aux].cb_btn_prior_click = state_event[state_aux].cb_btn_next_click				
-	state_event[state_aux].cb_btn_select_click 				 = func() {
-		// bt_stop()
+	// bt speaker mode
+	state_event[state_aux].btn_select_click.cb = func() bool {
+		// ここにペアリング先の再生を止める処理を置く
 		rpio.Pin(23).Low()		// AF amp disable
 		infoupdate(0, &errmessage[SPACE16])
 		state_cdx = state_normal_mode
+		return false
 	}
 
-	// set alarm
-	state_event[state_alarm_hour_set].cb_btn_mode_click		 = func() {
-		state_cdx = state_alarm_min_set		// アラーム分の設定へ遷移
-	}
-	state_event[state_alarm_hour_set].cb_btn_mode_press = state_event[state_alarm_hour_set].cb_btn_mode_click
-	state_event[state_alarm_hour_set].cb_btn_next_click		 = func() {
-		alarm_time_inc()
-	}
-	state_event[state_alarm_hour_set].cb_btn_next_repeat	 = func() {
-		alarm_time_inc()
-		showclock() // 表示が追いつかないのでここでも更新する
-	}
-	state_event[state_alarm_hour_set].cb_btn_prior_click	 = func() {
-		alarm_time_dec()
-	}
-	state_event[state_alarm_hour_set].cb_btn_prior_repeat	 = func() {
-		alarm_time_dec()
-		showclock() // 表示が追いつかないのでここでも更新する
-	}
-
-
-	state_event[state_alarm_min_set].cb_btn_mode_click		 	 = func() {
-		state_cdx = state_ext_mode			// alarm,sleepの切替へ遷移
-	}
-	state_event[state_alarm_min_set].cb_btn_mode_press = state_event[state_alarm_min_set].cb_btn_mode_click
-	state_event[state_alarm_min_set].cb_btn_next_click = state_event[state_alarm_hour_set].cb_btn_next_click
-	state_event[state_alarm_min_set].cb_btn_next_repeat = state_event[state_alarm_hour_set].cb_btn_next_repeat
-	state_event[state_alarm_min_set].cb_btn_prior_click = state_event[state_alarm_hour_set].cb_btn_prior_click
-	state_event[state_alarm_min_set].cb_btn_prior_repeat = state_event[state_alarm_hour_set].cb_btn_prior_repeat
-	
 	for {
 		select {
 			default:
@@ -727,35 +720,35 @@ func main() {
 						cmd.Run()
 
 					case btn_station_re_forward:
-						state_event[state_cdx].cb_re_cw()
+						state_event[state_cdx].re_cw.do_handler()
 					case btn_station_re_backward:
-						state_event[state_cdx].cb_re_ccw()
+						state_event[state_cdx].re_ccw.do_handler()
 
 					case btn_station_next: 
-						state_event[state_cdx].cb_btn_next_click()
+						state_event[state_cdx].btn_next_click.do_handler()
 					case btn_station_next|btn_station_repeat:
-						state_event[state_cdx].cb_btn_next_repeat()
+						state_event[state_cdx].btn_next_repeat.do_handler()
 					case btn_station_next|btn_station_release:
-						state_event[state_cdx].cb_btn_next_release()
+						state_event[state_cdx].btn_next_release.do_handler()
 
 					case btn_station_prior: 
-						state_event[state_cdx].cb_btn_prior_click()
+						state_event[state_cdx].btn_prior_click.do_handler()
 					case btn_station_prior|btn_station_repeat:
-						state_event[state_cdx].cb_btn_prior_repeat()
+						state_event[state_cdx].btn_prior_repeat.do_handler()
 					case btn_station_prior|btn_station_release:
-						state_event[state_cdx].cb_btn_prior_release()
+						state_event[state_cdx].btn_prior_release.do_handler()
 						
 					case btn_station_select:
-						state_event[state_cdx].cb_btn_select_click()
+						state_event[state_cdx].btn_select_click.do_handler()
 					case btn_station_select|btn_station_press:
-						state_event[state_cdx].cb_btn_select_press()
+						state_event[state_cdx].btn_select_press.do_handler()
 
 					case btn_station_mode:
-						state_event[state_cdx].cb_btn_mode_click()
+						state_event[state_cdx].btn_mode_click.do_handler()
 					case btn_station_mode|btn_station_press:
-						state_event[state_cdx].cb_btn_mode_press()
+						state_event[state_cdx].btn_mode_press.do_handler()
 					case btn_station_mode|btn_station_release:
-						state_event[state_cdx].cb_btn_mode_release()
+						state_event[state_cdx].btn_mode_release.do_handler()
 			
 				}
 		}

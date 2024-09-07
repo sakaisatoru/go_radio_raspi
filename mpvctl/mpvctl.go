@@ -33,16 +33,13 @@ const (
 var (
 	mpv net.Conn
 	mpvprocess *exec.Cmd
-	volconv = []int8{	 0, 1, 2, 3, 4, 4, 5, 6, 6,  7, 
-						 7, 8, 8, 9, 9,10,10,11,11, 11,
-						12,12,13,13,13,14,14,14,15, 15,
-						16,16,16,17,17,17,18,18,18, 19,
-						19,20,20,20,21,21,22,22,23, 23,
-						24,24,25,25,26,26,27,27,28, 28,
-						29,30,30,31,32,32,33,34,35, 35,
-						36,37,38,39,40,41,42,43,45, 46,
-						47,49,50,52,53,55,57,59,61, 63,
-						66,68,71,74,78,81,85,90,95,100}
+	volconv = []int8{	 0, 2, 4, 5, 6,  7, 8, 9,10,11,
+						12,13,13,14,15,	16,16,17,18,18,
+						19,20,21,22,23,	24,25,26,27,28,
+						29,30,32,33,35,	36,38,40,42,45,
+						47,50,53,57,61,	66,71,78,85,100}
+	Volume_min int8 = 0
+	Volume_max int8 = int8(len(volconv) - 1)
 	readbuf = make([]byte, IRCbuffsize)
 	Cb_connect_stop = func() bool { return false } 
 )
@@ -95,10 +92,10 @@ func Send(s string) error {
 }
 
 func Setvol(vol int8) {
-	if vol < 1 {
-		vol = 0
-	} else if vol >= 100 {
-		vol = 99
+	if vol < Volume_min {
+		vol = Volume_min
+	} else if vol > Volume_max {
+		vol = Volume_max
 	} 
 	s := fmt.Sprintf("{\"command\": [\"set_property\",\"volume\",%d]}\x0a",volconv[vol])
 	Send(s)
