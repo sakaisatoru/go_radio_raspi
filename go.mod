@@ -6,10 +6,13 @@ replace local.packages/aqm1602y => ./aqm1602y
 
 replace local.packages/netradio => ./netradio
 
+replace local.packages/mpvctl => ./mpvctl
+
 require (
 	github.com/davecheney/i2c v0.0.0-20140823063045-caf08501bef2
 	github.com/stianeikeland/go-rpio/v4 v4.6.0
 	local.packages/aqm1602y v0.0.0-00010101000000-000000000000
+	local.packages/mpvctl v0.0.0-00010101000000-000000000000
 	local.packages/netradio v0.0.0-00010101000000-000000000000
 )
 
