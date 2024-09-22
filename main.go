@@ -23,7 +23,7 @@ const (
 	stationlist string = "/usr/local/share/mpvradio/playlists/radio.m3u"
 	MPV_SOCKET_PATH string = "/run/mpvsocket"
 	RADIO_SOCKET_PATH string = "/run/mpvradio"
-	VERSIONMESSAGE string = "Radio Ver 1.23"
+	VERSIONMESSAGE string = "Radio Ver 1.24"
 )
 
 const (
@@ -262,9 +262,9 @@ func infoupdate(line uint8, mes *string) {
 }
 
 func btninput(code chan<- ButtonCode) {
-	rpio.Pin(23).Output()	// AF amp 制御用
-	rpio.Pin(23).PullUp()
-	rpio.Pin(23).Low()		// AF amp disable	
+	//~ rpio.Pin(23).Output()	// AF amp 制御用
+	//~ rpio.Pin(23).PullUp()
+	//~ rpio.Pin(23).Low()		// AF amp disable	
 	
 	hold := 0
 	btn_h := btn_station_none
@@ -276,10 +276,8 @@ func btninput(code chan<- ButtonCode) {
 		// ロータリーエンコーダ
 		// エッジを検出することで直前の相からの遷移方向を判断する。
 		// 両方検出した場合はノイズとして扱う
-		b4 := btnscan[5].Read()
-		b3 := btnscan[4].Read()
 		n = 0
-		switch (b4 << 1 | b3) {
+		switch ((btnscan[5].Read() << 1) | btnscan[4].Read()) {
 			case 0:
 				if btnscan[5].EdgeDetected() {
 					n++
@@ -645,7 +643,6 @@ func main() {
 	btncode := make(chan ButtonCode)
 	go btninput(btncode)
 	go recv_title(radiosocket)
-	
 	
 	// radio
 	state_event[state_normal_mode].btn_select_press.cb = func() bool {
