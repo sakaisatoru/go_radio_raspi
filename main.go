@@ -22,7 +22,6 @@ import (
 const (
 	stationlist string = "/usr/local/share/mpvradio/playlists/radio.m3u"
 	MPV_SOCKET_PATH string = "/run/mpvsocket"
-	RADIO_SOCKET_PATH string = "/run/mpvradio"
 	VERSIONMESSAGE string = "Radio Ver 1.24"
 )
 
@@ -121,7 +120,7 @@ var (
 	colon uint8 = 0
 	pos int = 0
 	radio_enable bool = false
-	volume int8 = 30
+	volume int8 = 20
 	display_colon = []uint8{' ',':'}
 	display_sleep = []uint8{' ',' ','S'}
 	display_buff string = ""
@@ -262,10 +261,6 @@ func infoupdate(line uint8, mes *string) {
 }
 
 func btninput(code chan<- ButtonCode) {
-	//~ rpio.Pin(23).Output()	// AF amp 制御用
-	//~ rpio.Pin(23).PullUp()
-	//~ rpio.Pin(23).Low()		// AF amp disable	
-	
 	hold := 0
 	btn_h := btn_station_none
 	
@@ -400,7 +395,7 @@ func tune() {
 	} else {
 		station_url = stlist[pos].Url
 	}
-
+	mpvctl.Setvol(volume)
 	s := fmt.Sprintf("{\"command\": [\"loadfile\",\"%s\"]}\x0a", station_url)
 	mpvctl.Send(s)
 	rpio.Pin(23).High()		// AF amp enable
@@ -460,38 +455,6 @@ func showclock() {
 		if display_buff_pos >= int16((display_buff_len/2)+1) {
 			display_buff_pos = 0
 		} 
-	}
-}
-
-func recv_title(socket net.Listener) {
-	var stmp string
-	buf := make([]byte, mpvctl.IRCbuffsize)
-	for {
-		n := func() int {
-			conn, err := socket.Accept()
-			if err != nil {
-				return 0
-			}
-			defer conn.Close()
-			n := 0
-			for {
-				n, err = conn.Read(buf)
-				if err != nil {
-					return 0
-				}
-				if n < mpvctl.IRCbuffsize {
-					break
-				}
-			}
-			conn.Write([]byte("OK\n"))
-			return n
-		}()
-		if radio_enable == true {
-			stmp = stlist[pos].Name + "  " + string(buf[:n])
-		} else {
-			stmp = string(buf[:n]) + "  "
-		}
-		infoupdate(0, &stmp)
 	}
 }
 
@@ -555,6 +518,18 @@ func prior_station_repeat() {
 	}
 }
 
+// mpvからの応答を選別するフィルタ
+func cb_mpvrecv(ms mpvctl.MpvIRC) (string, bool) {
+	if radio_enable {
+		if ms.Event == "property-change" {
+			if ms.Name == "metadata/by-key/icy-title" {
+				return ms.Data, true
+			}
+		}
+	}
+	return "", false
+}
+
 func main() {
 	if err := rpio.Open();err != nil {
 		infoupdate(0, &errmessage[ERROR_RPIO_NOT_OPEN])
@@ -579,13 +554,6 @@ func main() {
 	oled = aqm1602y.New(i2c)
 	oled.Configure()
 	oled.PrintWithPos(0, 0, []byte(VERSIONMESSAGE))
-
-	radiosocket, err := net.Listen("unix", RADIO_SOCKET_PATH)
-	if err != nil {
-		infoupdate(0, &errmessage[ERROR_SOCKET_NOT_OPEN])
-		infoupdate(1, &errmessage[ERROR_HUP])
-		log.Fatal(err)
-	}
 
 	if err := mpvctl.Init(MPV_SOCKET_PATH);err != nil {
 		infoupdate(0, &errmessage[ERROR_MPV_FAULT])
@@ -613,11 +581,7 @@ func main() {
 					if err = mpvctl.Mpvkill();err != nil {
 						log.Println(err)
 					}
-					radiosocket.Close()
 					if err = os.Remove(MPV_SOCKET_PATH);err != nil {
-						log.Println(err)
-					}
-					if err = os.Remove(RADIO_SOCKET_PATH);err != nil {
 						log.Println(err)
 					}
 					rpio.Pin(23).Low()		// AF amp disable
@@ -636,13 +600,17 @@ func main() {
 		infoupdate(1, &errmessage[ERROR_HUP])
 		log.Fatal(err)	// time out
 	}
+	
+	mpvret := make(chan string)
+	go mpvctl.Recv(mpvret, cb_mpvrecv)
+	s := "{ \"command\": [\"observe_property_string\", 1, \"metadata/by-key/icy-title\"] }"
+	mpvctl.Send(s)
 	mpvctl.Setvol(volume)
 
 	colonblink := time.NewTicker(500*time.Millisecond)
 
 	btncode := make(chan ButtonCode)
 	go btninput(btncode)
-	go recv_title(radiosocket)
 	
 	// radio
 	state_event[state_normal_mode].btn_select_press.cb = func() bool {
@@ -699,7 +667,17 @@ func main() {
 						}
 					}
 				}
-				
+
+			case title := <-mpvret:
+				// mpv の応答でフィルタで処理された文字列をここで処理する
+				var stmp string
+				if radio_enable == true {
+					stmp = stlist[pos].Name + "  " + title
+				} else {
+					stmp = title + "  "
+				}
+				infoupdate(0, &stmp)
+			
 			case <-colonblink.C:
 				colon ^= 1
 				showclock()
