@@ -5,17 +5,21 @@ import (
 		"net"
 		"time"
 		"os/exec"
+		"strings"
+		"encoding/json"
 )
 
-type MpvIRCdata struct {
-	Filename	*string		`json:"filename"`
-	Current		bool		`json:"current"`
-	Playing		bool		`json:"playing"`
-}
+//~ type MpvIRCdata struct {
+	//~ Filename	*string		`json:"filename"`
+	//~ Current		bool		`json:"current"`
+	//~ Playing		bool		`json:"playing"`
+//~ }
  
-type mpvIRC struct {
-    Data       	*MpvIRCdata	 `json:"data"`
-	Request_id  *int	 `json:"request_id"`
+type MpvIRC struct {
+    //~ Data       	*MpvIRCdata	 `json:"data"`
+    Data       	string	 `json:"data"`
+    Name		string	 `json:"name"`
+	Request_id  int	 	 `json:"request_id"`
     Err 		string	 `json:"error"`
     Event		string	 `json:"event"`
 }
@@ -27,7 +31,8 @@ const (
 	MPVOPTION3     string = "--no-video"
 	MPVOPTION4     string = "--no-cache"
 	MPVOPTION5     string = "--stream-buffer-size=256KiB"
-	MPVOPTION6	   string = "--script=/home/pi/bin/title_trigger.lua"
+	//~ MPVOPTION6	   string = "--script=/home/pi/bin/title_trigger.lua"
+	MPVOPTION6	   string = ""
 )
 
 var (
@@ -48,7 +53,8 @@ func Init(socketpath string) error {
 	mpvprocess = exec.Command("/usr/bin/mpv", 	MPVOPTION1, 
 												MPVOPTION2+socketpath, 
 												MPVOPTION3, MPVOPTION4, 
-												MPVOPTION5, MPVOPTION6)
+												//~ MPVOPTION5, MPVOPTION6)
+												MPVOPTION5)
 	err := mpvprocess.Start()
 	return err
 }
@@ -78,17 +84,33 @@ func Close() {
 }
 
 func Send(s string) error {
-	mpv.Write([]byte(s))
+	_, err := mpv.Write([]byte(s))
+	return err
+}
+
+func Recv(ch chan<- string, cb func(MpvIRC) (string, bool)) {
+	var ms MpvIRC
+	
 	for {
-		n, err := mpv.Read(readbuf)
-		if err != nil {
-			return err
-		}
+		//~ n, err := mpv.Read(readbuf)
+		//~ if err != nil {
+			//~ return
+		//~ }
+		n, _ := mpv.Read(readbuf)
 		if n < IRCbuffsize {
-			break
+			for _, s := range(strings.Split(string(readbuf[:n]),"\n")) {
+				if len(s) > 0 {
+					err := json.Unmarshal([]byte(s),&ms)
+					if err == nil {
+						s, ok := cb(ms)
+						if ok  {
+							ch <- s
+						}
+					}
+				}
+			}
 		}
 	}
-	return nil
 }
 
 func Setvol(vol int8) {
