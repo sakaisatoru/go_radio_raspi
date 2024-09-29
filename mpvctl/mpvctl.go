@@ -24,6 +24,14 @@ type MpvIRC struct {
     Event		string	 `json:"event"`
 }
 
+func (ms *MpvIRC) clear() {
+	ms.Data = "" 
+    ms.Name = ""
+	ms.Request_id = 0
+    ms.Err = ""		
+    ms.Event = ""		
+}
+
 const (
 	IRCbuffsize int = 1024
 	MPVOPTION1     string = "--idle"
@@ -88,23 +96,24 @@ func Send(s string) error {
 	return err
 }
 
+
+
 func Recv(ch chan<- string, cb func(MpvIRC) (string, bool)) {
 	var ms MpvIRC
 	
 	for {
-		//~ n, err := mpv.Read(readbuf)
-		//~ if err != nil {
-			//~ return
-		//~ }
-		n, _ := mpv.Read(readbuf)
-		if n < IRCbuffsize {
-			for _, s := range(strings.Split(string(readbuf[:n]),"\n")) {
-				if len(s) > 0 {
-					err := json.Unmarshal([]byte(s),&ms)
-					if err == nil {
-						s, ok := cb(ms)
-						if ok  {
-							ch <- s
+		n, err := mpv.Read(readbuf)
+		if err == nil {
+			if n < IRCbuffsize {
+				for _, s := range(strings.Split(string(readbuf[:n]),"\n")) {
+					if len(s) > 0 {
+						ms.clear() // 中身を消さないとフィールド単位で持ち越される場合がある
+						err := json.Unmarshal([]byte(s),&ms)
+						if err == nil {
+							s, ok := cb(ms)
+							if ok  {
+								ch <- s
+							}
 						}
 					}
 				}
