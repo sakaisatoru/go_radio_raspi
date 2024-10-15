@@ -9,7 +9,6 @@ import (
 	"bufio"
 	"log"
 	"strings"
-	"net"
 	"time"
 	"sync"
 	"github.com/davecheney/i2c"
@@ -22,7 +21,7 @@ import (
 const (
 	stationlist string = "/usr/local/share/mpvradio/playlists/radio.m3u"
 	MPV_SOCKET_PATH string = "/run/mpvsocket"
-	VERSIONMESSAGE string = "Radio Ver 1.28"
+	VERSIONMESSAGE string = "Radio Ver 1.29"
 )
 
 const (
@@ -112,7 +111,6 @@ const (
 )
 
 var (
-	mpv	net.Conn
 	oled aqm1602y.AQM1602Y
 	mu sync.Mutex
 	stlist []*netradio.StationInfo
