@@ -1,4 +1,4 @@
-module com.google.endeavor2wako/netradio
+module github.com/sakaisatoru/go_radio_raspi/netradio
 
 go 1.22.1
 
