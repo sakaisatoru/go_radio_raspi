@@ -1,4 +1,4 @@
-module radio.raspi/m
+module github.com/sakaisatoru/go_radio_raspi/aqm1602y
 
 go 1.22.1
 
