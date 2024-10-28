@@ -16,6 +16,7 @@ import (
 	"local.packages/aqm1602y"
 	"local.packages/netradio"
 	"local.packages/mpvctl"
+	"local.packages/rotaryencoder"
 )
 
 const (
@@ -79,8 +80,8 @@ const (
 	btn_station_prior
 	btn_station_mode
 	btn_station_select
-	btn_station_re_forward
-	btn_station_re_backward
+	btn_station_re_a
+	btn_station_re_b
 	btn_station_repeat = 0x8
 	btn_station_press  = 0x10
 	btn_station_release = 0x20
@@ -263,62 +264,8 @@ func btninput(code chan<- ButtonCode) {
 	hold := 0
 	btn_h := btn_station_none
 	
-	var n int
-	
 	for {
 		time.Sleep(10*time.Millisecond)
-		// ロータリーエンコーダ
-		// エッジを検出することで直前の相からの遷移方向を判断する。
-		// 両方検出した場合はノイズとして扱う
-		n = 0
-		switch ((btnscan[5].Read() << 1) | btnscan[4].Read()) {
-			case 0:
-				if btnscan[5].EdgeDetected() {
-					n++
-				}
-				if btnscan[4].EdgeDetected() {
-					n--
-				}
-				btnscan[4].Detect(rpio.RiseEdge)
-				btnscan[5].Detect(rpio.RiseEdge)
-			case 1:
-				if btnscan[4].EdgeDetected() {
-					n++
-				}
-				if btnscan[5].EdgeDetected() {
-					n--
-				}
-				btnscan[5].Detect(rpio.RiseEdge)
-				btnscan[4].Detect(rpio.FallEdge)
-			case 3:
-				if btnscan[5].EdgeDetected() {
-					n++
-				}
-				if btnscan[4].EdgeDetected() {
-					n--
-				}
-				btnscan[4].Detect(rpio.FallEdge)
-				btnscan[5].Detect(rpio.FallEdge)
-			case 2:
-				if btnscan[4].EdgeDetected() {
-					n++
-				}
-				if btnscan[5].EdgeDetected() {
-					n--
-				}
-				btnscan[5].Detect(rpio.FallEdge)
-				btnscan[4].Detect(rpio.RiseEdge)
-		}
-		
-		switch n {
-			case 1:
-				code <- btn_station_re_forward
-			case -1:
-				code <- btn_station_re_backward
-			default:
-				// ノイズとして無視する
-		}
-
 		switch btn_h {
 			case 0:
 				for i, sn := range(btnscan[:btn_station_select]) {
@@ -556,6 +503,17 @@ func main() {
 	oled.Configure()
 	oled.PrintWithPos(0, 0, []byte(VERSIONMESSAGE))
 
+	// rotaryencoder
+	var rencoder rotaryencoder.RotaryEncoder
+	rencoder = rotaryencoder.New(btnscan[btn_station_re_a - 1], 
+		btnscan[btn_station_re_b - 1],
+		//~ func() {fmt.Println("cw", rencoder.GetCounter())},
+		func() {},
+		//~ func() {fmt.Println("ccw", rencoder.GetCounter())})
+		func() {})
+	rencoder.SetSamplingTime(4)
+	
+	// mpv
 	if err := mpvctl.Init(MPV_SOCKET_PATH);err != nil {
 		infoupdate(0, errmessage[ERROR_MPV_FAULT])
 		infoupdate(1, errmessage[ERROR_HUP])
@@ -612,6 +570,8 @@ func main() {
 
 	btncode := make(chan ButtonCode)
 	go btninput(btncode)
+	rencode := make(chan rotaryencoder.REvector)
+	go rencoder.DetectLoop(rencode)
 	
 	// radioからaux(BT Speaker mode)への遷移
 	state_event[state_normal_mode].btn_select_press.cb = func() bool {
@@ -681,6 +641,16 @@ func main() {
 				colon ^= 1
 				showclock()
 				
+			case r := <-rencode:
+				switch r {
+					default:
+					
+					case rotaryencoder.Forward:
+						state_event[state_cdx].re_cw.do_handler()
+					case rotaryencoder.Backward:
+						state_event[state_cdx].re_ccw.do_handler()
+				}
+				
 			case r := <-btncode:
 				switch r {
 					default:
@@ -693,10 +663,6 @@ func main() {
 						cmd := exec.Command("/usr/bin/sudo", "/usr/sbin/poweroff")
 						cmd.Run()
 
-					case btn_station_re_forward:
-						state_event[state_cdx].re_cw.do_handler()
-					case btn_station_re_backward:
-						state_event[state_cdx].re_ccw.do_handler()
 
 					case btn_station_next: 
 						state_event[state_cdx].btn_next_click.do_handler()

@@ -9,14 +9,7 @@ import (
 		"encoding/json"
 )
 
-//~ type MpvIRCdata struct {
-	//~ Filename	*string		`json:"filename"`
-	//~ Current		bool		`json:"current"`
-	//~ Playing		bool		`json:"playing"`
-//~ }
- 
 type MpvIRC struct {
-    //~ Data       	*MpvIRCdata	 `json:"data"`
     Data       	string	 `json:"data"`
     Name		string	 `json:"name"`
 	Request_id  int	 	 `json:"request_id"`
@@ -39,8 +32,6 @@ const (
 	MPVOPTION3     string = "--no-video"
 	MPVOPTION4     string = "--no-cache"
 	MPVOPTION5     string = "--stream-buffer-size=256KiB"
-	//~ MPVOPTION6	   string = "--script=/home/pi/bin/title_trigger.lua"
-	MPVOPTION6	   string = ""
 )
 
 var (
@@ -61,7 +52,6 @@ func Init(socketpath string) error {
 	mpvprocess = exec.Command("/usr/bin/mpv", 	MPVOPTION1, 
 												MPVOPTION2+socketpath, 
 												MPVOPTION3, MPVOPTION4, 
-												//~ MPVOPTION5, MPVOPTION6)
 												MPVOPTION5)
 	err := mpvprocess.Start()
 	return err
