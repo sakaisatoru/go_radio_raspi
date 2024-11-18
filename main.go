@@ -22,7 +22,7 @@ import (
 const (
 	stationlist string = "/usr/local/share/mpvradio/playlists/radio.m3u"
 	MPV_SOCKET_PATH string = "/run/mpvsocket"
-	VERSIONMESSAGE string = "Radio Ver 1.29"
+	VERSIONMESSAGE string = "Radio Ver 1.30"
 )
 
 const (
@@ -526,30 +526,11 @@ func main() {
 		radio_enable = false
 		return false
 	}
+
 	// シグナルハンドラ
-	go func() {
-		// shutdown this program
-		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, syscall.SIGTERM, syscall.SIGQUIT, 
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGTERM, syscall.SIGQUIT, 
 					syscall.SIGHUP, syscall.SIGINT) // syscall.SIGUSR1
-		
-		for {
-			switch <-signals {
-				case syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGINT:
-					mpvctl.Close()
-					if err = mpvctl.Mpvkill();err != nil {
-						log.Println(err)
-					}
-					if err = os.Remove(MPV_SOCKET_PATH);err != nil {
-						log.Println(err)
-					}
-					rpio.Pin(23).Low()		// AF amp disable
-					oled.DisplayOff()
-					close(signals)
-					os.Exit(0)
-			}
-		}
-	}()
 	
 	stlen = setup_station_list()
 	go netradio.Radiko_setup(stlist)
@@ -628,6 +609,20 @@ func main() {
 						}
 					}
 				}
+
+			case <-signals:
+				mpvctl.Close()
+				if err = mpvctl.Mpvkill();err != nil {
+					log.Println(err)
+				}
+				if err = os.Remove(MPV_SOCKET_PATH);err != nil {
+					log.Println(err)
+				}
+				rpio.Pin(23).Low()		// AF amp disable
+				rpio.Close()
+				oled.DisplayOff()
+				close(signals)
+				os.Exit(0)
 
 			case title := <-mpvret:
 				// mpv の応答でフィルタで処理された文字列をここで処理する
