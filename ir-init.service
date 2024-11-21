@@ -1,0 +1,13 @@
+[Unit]
+Description = irを初期化する
+After=local-fs.target network-online.target
+
+[Service]
+ExecStart=/usr/bin/ir-keytable -p nec
+Type=exec
+Restart=oneshot
+
+[Install]
+WantedBy = multi-user.target
+
+
