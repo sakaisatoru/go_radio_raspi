@@ -21,7 +21,7 @@ import (
 
 const (
 	stationlist string = "/usr/local/share/mpvradio/playlists/radio.m3u"
-	MPV_SOCKET_PATH string = "/run/mpvsocket"
+	MPV_SOCKET_PATH string = "/run/user/1001/mpvsocket"
 	VERSIONMESSAGE string = "Radio Ver 1.30"
 )
 
@@ -512,7 +512,7 @@ func main() {
 		//~ func() {fmt.Println("ccw", rencoder.GetCounter())})
 		func() {})
 	rencoder.SetSamplingTime(4)
-	
+
 	// mpv
 	if err := mpvctl.Init(MPV_SOCKET_PATH);err != nil {
 		infoupdate(0, errmessage[ERROR_MPV_FAULT])
@@ -535,7 +535,7 @@ func main() {
 	stlen = setup_station_list()
 	go netradio.Radiko_setup(stlist)
 	
-	if mpvctl.Open(MPV_SOCKET_PATH) != nil {
+	if err := mpvctl.Open(MPV_SOCKET_PATH);err != nil {
 		infoupdate(0, errmessage[ERROR_MPV_CONN])
 		infoupdate(1, errmessage[ERROR_HUP])
 		log.Fatal(err)	// time out

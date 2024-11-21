@@ -1,0 +1,12 @@
+[Unit]
+Description = ディレクトリ /run/user/1000を作成する
+After=local-fs.target network-online.target
+
+[Service]
+ExecStart=/home/pi/program/go_radio/mkdir1000.sh
+Type=exec
+Restart=oneshot
+
+[Install]
+WantedBy = multi-user.target
+
