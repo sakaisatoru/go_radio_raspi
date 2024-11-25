@@ -17,6 +17,7 @@ import (
 	"local.packages/netradio"
 	"local.packages/mpvctl"
 	"local.packages/rotaryencoder"
+	"local.packages/irremote"
 )
 
 const (
@@ -109,6 +110,7 @@ const (
 	ERROR_RPIO_NOT_OPEN
 	ERROR_SOCKET_NOT_OPEN
 	BT_SPEAKER
+	IR_NOT_OPEN
 )
 
 var (
@@ -134,7 +136,8 @@ var (
 						"tuning error.   ",
 						"rpio can't open.",
 						"socket not open.",
-						"BT Speaker mode "}
+						"BT Speaker mode ",
+						"Ir not open.    "}
 	btnscan = []rpio.Pin{26, 5, 6, 22, 17, 27}
 	state_cdx int = state_normal_mode
 	state_event = [statelength]stateEventhandlers {
@@ -513,6 +516,16 @@ func main() {
 		func() {})
 	rencoder.SetSamplingTime(4)
 
+	// Ir
+	if _, err := irremote.Open();err != nil {
+		infoupdate(0, errmessage[IR_NOT_OPEN])
+		infoupdate(1, errmessage[ERROR_HUP])
+		log.Fatal(err)
+	}
+	defer irremote.Close()
+	irch := make(chan int32)
+	go irremote.Read(irch)
+
 	// mpv
 	if err := mpvctl.Init(MPV_SOCKET_PATH);err != nil {
 		infoupdate(0, errmessage[ERROR_MPV_FAULT])
@@ -609,7 +622,33 @@ func main() {
 						}
 					}
 				}
-
+			
+			case value := <-irch:
+				switch value {
+					default:
+					
+					case irremote.Ir_power:
+						toggle_radio()
+						
+					case irremote.Ir_N:
+						prior_tune()
+						
+					case irremote.Ir_N|irremote.Ir_Holdflag:
+						prior_station_repeat()
+						
+					case irremote.Ir_S:
+						next_tune()
+						
+					case irremote.Ir_S|irremote.Ir_Holdflag:
+						next_station_repeat()
+						
+					case irremote.Ir_NW:
+						inc_volume()
+						
+					case irremote.Ir_SW:
+						dec_volume()
+				}
+				
 			case <-signals:
 				mpvctl.Close()
 				if err = mpvctl.Mpvkill();err != nil {
@@ -620,6 +659,7 @@ func main() {
 				}
 				rpio.Pin(23).Low()		// AF amp disable
 				rpio.Close()
+				irremote.Close()
 				oled.DisplayOff()
 				close(signals)
 				os.Exit(0)
