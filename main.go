@@ -627,26 +627,31 @@ func main() {
 				switch value {
 					default:
 					
-					case irremote.Ir_power:
-						toggle_radio()
+					case irremote.Ir_Center:
+						state_event[state_cdx].btn_mode_click.do_handler()
+					case irremote.Ir_Center|irremote.Ir_Holdflag:
+						state_event[state_cdx].btn_mode_press.do_handler()
 						
 					case irremote.Ir_N:
-						prior_tune()
+						state_event[state_cdx].btn_prior_click.do_handler()
 						
 					case irremote.Ir_N|irremote.Ir_Holdflag:
-						prior_station_repeat()
+						state_event[state_cdx].btn_prior_repeat.do_handler()
 						
 					case irremote.Ir_S:
-						next_tune()
+						state_event[state_cdx].btn_next_click.do_handler()
 						
 					case irremote.Ir_S|irremote.Ir_Holdflag:
-						next_station_repeat()
+						state_event[state_cdx].btn_next_repeat.do_handler()
 						
 					case irremote.Ir_NW:
 						inc_volume()
 						
 					case irremote.Ir_SW:
 						dec_volume()
+					
+					case irremote.Ir_Power:
+						state_event[state_cdx].btn_select_click.do_handler()
 				}
 				
 			case <-signals:

@@ -1,7 +1,6 @@
 package irremote
 
 import (
-	"fmt"
 	"syscall"
 	"unsafe"
 	"time"
@@ -16,7 +15,7 @@ type Input_event struct {
 }
 
 const (
-		Ir_power = 0x10d8
+		Ir_Power = 0x10d8
 		Ir_A 	= 0x10f8
 		Ir_B 	= 0x1078
 		Ir_C 	= 0x1058
@@ -101,61 +100,3 @@ func Read(ch chan<- int32) {
 
 }
 
-func main() {
-	fd,err := syscall.Open("/dev/input/event0", syscall.O_RDONLY, 0)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	defer syscall.Close(fd)
-	
-	var( 
-		buf = make([]byte, 24) 
-		ev	*Input_event
-		t_span time.Duration = 110*1e6	// 110ms
-	)
-	hold_span := 8
-	hold_count := 0
-	old := Input_event {
-			Value:0,}
-	t_start := time.Now()
-	hold := false
-	release := false
-	
-	for {
-		_, err := syscall.Read(fd, buf)
-		if err != nil {
-			fmt.Println(err)
-			break
-		}
-		ev = (*Input_event)(unsafe.Pointer(&buf[0]))
-		if ev.Type == unix.EV_MSC {
-			if ev.Value != old.Value || time.Since(t_start) > t_span {
-				release = true
-				hold = false
-				hold_count = 0
-			}
-			
-			t_start = time.Now()
-			old = *ev
-			
-			if hold {
-				fmt.Printf("hold : value = %08X  code = %04X\n", ev.Value, ev.Code)
-				continue
-			}
-			
-			if release {
-				fmt.Printf("hold : value = %08X  code = %04X\n", ev.Value, ev.Code)
-				release = false
-				continue
-			}
-			
-			if release == false {
-				hold_count++
-				if hold_count > hold_span {
-					hold = true
-				}
-			}
-		} 
-	}
-}
