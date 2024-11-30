@@ -23,7 +23,7 @@ import (
 const (
 	stationlist string = "/usr/local/share/mpvradio/playlists/radio.m3u"
 	MPV_SOCKET_PATH string = "/run/user/1001/mpvsocket"
-	VERSIONMESSAGE string = "Radio Ver 1.30"
+	VERSIONMESSAGE string = "Radio Ver 1.31"
 )
 
 const (
@@ -126,6 +126,11 @@ var (
 	display_sleep = []uint8{' ',' ','S'}
 	display_buff []byte
 	display_buff_pos int16 = 0
+	
+	display_volume bool = false
+	display_volume_time time.Time
+	display_volume_time_span time.Duration = 700*1000*1000
+	
 	clock_mode uint8 = clock_mode_normal
 	alarm_time time.Time = time.Date(2024, time.July, 4, 4, 50, 0, 0, time.UTC)
 	tuneoff_time time.Time = time.Unix(0, 0).UTC()
@@ -371,7 +376,7 @@ func alarm_time_dec() {
 func showclock() {
 	mu.Lock()
 	defer mu.Unlock()
-	var s0 string
+	var s, s0 string
 	// alarm
 	if clock_mode & 1 == 1 {
 		if (state_cdx == state_alarm_hour_set||state_cdx == state_alarm_min_set) && colon == 1 {
@@ -387,10 +392,18 @@ func showclock() {
 	} else {
 		s0 = "      "
 	}
+	if time.Since(display_volume_time) >= display_volume_time_span {
+		display_volume = false
+	}
 	n := time.Now()
-	s := fmt.Sprintf("%s %c   %2d%c%02d", s0, 
+	if display_volume {
+		s = fmt.Sprintf("volume:%2d  %2d%c%02d", volume,
+		n.Hour(), display_colon[colon], n.Minute())
+	} else {
+		s = fmt.Sprintf("%s %c   %2d%c%02d", s0, 
 							display_sleep[clock_mode & 2], 
 							n.Hour(), display_colon[colon], n.Minute())
+	}
 	oled.PrintWithPos(0, 1, []byte(s))
 	
 	// １行目の表示
@@ -408,24 +421,34 @@ func showclock() {
 	}
 }
 
+func show_volume() {
+	mu.Lock()
+	defer mu.Unlock()
+	display_volume_time = time.Now()
+	display_volume = true
+
+	n := time.Now()
+	s := fmt.Sprintf("volume:%2d  %2d%c%02d", volume,
+							n.Hour(), display_colon[colon], n.Minute())
+	oled.PrintWithPos(0, 1, []byte(s))
+}
+
 func inc_volume() {
-	if radio_enable {
-		volume++
-		if volume > mpvctl.Volume_max { 
-			volume = mpvctl.Volume_max 
-		}
-		mpvctl.Setvol(volume)
+	volume++
+	if volume > mpvctl.Volume_max { 
+		volume = mpvctl.Volume_max 
 	}
+	mpvctl.Setvol(volume)
+	show_volume()
 }
 	
 func dec_volume() {
-	if radio_enable {
-		volume--
-		if volume < mpvctl.Volume_min {
-			volume = mpvctl.Volume_min
-		}
-		mpvctl.Setvol(volume)
+	volume--
+	if volume < mpvctl.Volume_min {
+		volume = mpvctl.Volume_min
 	}
+	mpvctl.Setvol(volume)
+	show_volume()
 }
 
 func toggle_radio() {
@@ -646,8 +669,14 @@ func main() {
 						
 					case irremote.Ir_NW:
 						inc_volume()
+
+					case irremote.Ir_NW|irremote.Ir_Holdflag:
+						inc_volume()
 						
 					case irremote.Ir_SW:
+						dec_volume()
+						
+					case irremote.Ir_SW|irremote.Ir_Holdflag:
 						dec_volume()
 					
 					case irremote.Ir_Power:

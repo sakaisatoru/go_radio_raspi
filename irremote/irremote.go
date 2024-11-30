@@ -62,7 +62,6 @@ func Read(ch chan<- int32) {
 	for {
 		_, err := syscall.Read(fd, buf)
 		if err != nil {
-			//~ fmt.Println(err)
 			break
 		}
 		ev = (*Input_event)(unsafe.Pointer(&buf[0]))
@@ -78,13 +77,11 @@ func Read(ch chan<- int32) {
 			
 			if hold {
 				ch <- (ev.Value |Ir_Holdflag)
-				//~ fmt.Printf("hold : value = %08X  code = %04X\n", ev.Value, ev.Code)
 				continue
 			}
 			
 			if release {
 				ch <- ev.Value
-				//~ fmt.Printf("hold : value = %08X  code = %04X\n", ev.Value, ev.Code)
 				release = false
 				continue
 			}
