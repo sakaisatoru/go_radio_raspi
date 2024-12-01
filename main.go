@@ -540,7 +540,7 @@ func main() {
 	rencoder.SetSamplingTime(4)
 
 	// Ir
-	if _, err := irremote.Open(); err != nil {
+	if err := irremote.Open(); err != nil {
 		infoupdate(0, errmessage[IR_NOT_OPEN])
 		infoupdate(1, errmessage[ERROR_HUP])
 		log.Fatal(err)
@@ -650,8 +650,16 @@ func main() {
 			switch value {
 			default:
 
+			case irremote.Ir_C:
+				if state_cdx == state_aux {
+					state_event[state_aux].btn_select_click.do_handler()
+				} else {
+					state_event[state_normal_mode].btn_select_press.do_handler()
+				}
+			
 			case irremote.Ir_Center:
 				state_event[state_cdx].btn_mode_click.do_handler()
+			
 			case irremote.Ir_Center | irremote.Ir_Holdflag:
 				state_event[state_cdx].btn_mode_press.do_handler()
 

@@ -35,10 +35,10 @@ var (
 	fd int
 )
 
-func Open() (int, error) {
+func Open() error {
 	var err error
 	fd, err = syscall.Open("/dev/input/event0", syscall.O_RDONLY, 0)
-	return fd, err
+	return err
 }
 
 func Close() {
