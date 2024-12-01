@@ -6,19 +6,20 @@ import (
 )
 
 type REvector int
+
 const (
 	NoData REvector = iota
-	Forward  
+	Forward
 	Backward
 )
 
 type RotaryEncoder struct {
-	pin_a rpio.Pin
-	pin_b rpio.Pin
-	counter int
+	pin_a        rpio.Pin
+	pin_b        rpio.Pin
+	counter      int
 	samplingtime int
-	cb_forward func()
-	cb_backward func()
+	cb_forward   func()
+	cb_backward  func()
 }
 
 func cb_default() {
@@ -31,13 +32,13 @@ func New(a rpio.Pin, b rpio.Pin, cb_for func(), cb_back func()) RotaryEncoder {
 	if cb_back == nil {
 		cb_for = cb_default
 	}
-	return RotaryEncoder {
-		pin_a:	a,
-		pin_b: 	b,
-		counter:		0,
-		samplingtime:	2,
-		cb_forward:		cb_for,
-		cb_backward:	cb_back,
+	return RotaryEncoder{
+		pin_a:        a,
+		pin_b:        b,
+		counter:      0,
+		samplingtime: 2,
+		cb_forward:   cb_for,
+		cb_backward:  cb_back,
 	}
 }
 
@@ -69,12 +70,12 @@ func (r *RotaryEncoder) DetectLoop(code chan<- REvector) {
 		b_edgemode rpio.Edge
 	)
 	a_edgemode = rpio.FallEdge
-	rpio.Pin(r.pin_a).Detect(a_edgemode)	// A相たち下がり検出
+	rpio.Pin(r.pin_a).Detect(a_edgemode) // A相たち下がり検出
 	b_edgemode = rpio.NoEdge
-	rpio.Pin(r.pin_b).Detect(b_edgemode)	// B相エッジ検出マスク
-	
+	rpio.Pin(r.pin_b).Detect(b_edgemode) // B相エッジ検出マスク
+
 	for {
-		time.Sleep(time.Duration(r.samplingtime)*time.Millisecond)
+		time.Sleep(time.Duration(r.samplingtime) * time.Millisecond)
 		if rpio.Pin(r.pin_a).EdgeDetected() {
 			if a_edgemode == rpio.FallEdge {
 				// A相たち下がりを検出
@@ -142,4 +143,4 @@ func (r *RotaryEncoder) DetectLoop(code chan<- REvector) {
 			}
 		}
 	}
-}	
+}

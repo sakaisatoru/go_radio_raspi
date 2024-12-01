@@ -1,58 +1,58 @@
 package mpvctl
 
 import (
-		"fmt"
-		"net"
-		"time"
-		"os/exec"
-		"strings"
-		"encoding/json"
+	"encoding/json"
+	"fmt"
+	"net"
+	"os/exec"
+	"strings"
+	"time"
 )
 
 type MpvIRC struct {
-    Data       	string	 `json:"data"`
-    Name		string	 `json:"name"`
-	Request_id  int	 	 `json:"request_id"`
-    Err 		string	 `json:"error"`
-    Event		string	 `json:"event"`
+	Data       string `json:"data"`
+	Name       string `json:"name"`
+	Request_id int    `json:"request_id"`
+	Err        string `json:"error"`
+	Event      string `json:"event"`
 }
 
 func (ms *MpvIRC) clear() {
-	ms.Data = "" 
-    ms.Name = ""
+	ms.Data = ""
+	ms.Name = ""
 	ms.Request_id = 0
-    ms.Err = ""		
-    ms.Event = ""		
+	ms.Err = ""
+	ms.Event = ""
 }
 
 const (
-	IRCbuffsize int = 1024
-	MPVOPTION1     string = "--idle"
-	MPVOPTION2     string = "--input-ipc-server="
-	MPVOPTION3     string = "--no-video"
-	MPVOPTION4     string = "--no-cache"
-	MPVOPTION5     string = "--stream-buffer-size=256KiB"
+	IRCbuffsize int    = 1024
+	MPVOPTION1  string = "--idle"
+	MPVOPTION2  string = "--input-ipc-server="
+	MPVOPTION3  string = "--no-video"
+	MPVOPTION4  string = "--no-cache"
+	MPVOPTION5  string = "--stream-buffer-size=256KiB"
 )
 
 var (
-	mpv net.Conn
+	mpv        net.Conn
 	mpvprocess *exec.Cmd
-	volconv = []int8{	 0, 2, 4, 5, 6,  7, 8, 9,10,11,
-						12,13,13,14,15,	16,16,17,18,18,
-						19,20,21,22,23,	24,25,26,27,28,
-						29,30,32,33,35,	36,38,40,42,45,
-						47,50,53,57,61,	66,71,78,85,100}
-	Volume_min int8 = 0
-	Volume_max int8 = int8(len(volconv) - 1)
-	readbuf = make([]byte, IRCbuffsize)
-	Cb_connect_stop = func() bool { return false } 
+	volconv    = []int8{0, 2, 4, 5, 6, 7, 8, 9, 10, 11,
+		12, 13, 13, 14, 15, 16, 16, 17, 18, 18,
+		19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
+		29, 30, 32, 33, 35, 36, 38, 40, 42, 45,
+		47, 50, 53, 57, 61, 66, 71, 78, 85, 100}
+	Volume_min      int8 = 0
+	Volume_max      int8 = int8(len(volconv) - 1)
+	readbuf              = make([]byte, IRCbuffsize)
+	Cb_connect_stop      = func() bool { return false }
 )
 
 func Init(socketpath string) error {
-	mpvprocess = exec.Command("/usr/bin/mpv", 	MPVOPTION1, 
-												MPVOPTION2+socketpath, 
-												MPVOPTION3, MPVOPTION4, 
-												MPVOPTION5)
+	mpvprocess = exec.Command("/usr/bin/mpv", MPVOPTION1,
+		MPVOPTION2+socketpath,
+		MPVOPTION3, MPVOPTION4,
+		MPVOPTION5)
 	err := mpvprocess.Start()
 	return err
 }
@@ -64,14 +64,14 @@ func Mpvkill() error {
 
 func Open(socket_path string) error {
 	var err error
-	for i := 0; ;i++ {
+	for i := 0; ; i++ {
 		mpv, err = net.Dial("unix", socket_path)
 		if err == nil {
 			break
 		}
-		time.Sleep(200*time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 		if i > 60 {
-			return err	// time out
+			return err // time out
 		}
 	}
 	return nil
@@ -86,22 +86,20 @@ func Send(s string) error {
 	return err
 }
 
-
-
 func Recv(ch chan<- string, cb func(MpvIRC) (string, bool)) {
 	var ms MpvIRC
-	
+
 	for {
 		n, err := mpv.Read(readbuf)
 		if err == nil {
 			if n < IRCbuffsize {
-				for _, s := range(strings.Split(string(readbuf[:n]),"\n")) {
+				for _, s := range strings.Split(string(readbuf[:n]), "\n") {
 					if len(s) > 0 {
 						ms.clear() // 中身を消さないとフィールド単位で持ち越される場合がある
-						err := json.Unmarshal([]byte(s),&ms)
+						err := json.Unmarshal([]byte(s), &ms)
 						if err == nil {
 							s, ok := cb(ms)
-							if ok  {
+							if ok {
 								ch <- s
 							}
 						}
@@ -117,8 +115,8 @@ func Setvol(vol int8) {
 		vol = Volume_min
 	} else if vol > Volume_max {
 		vol = Volume_max
-	} 
-	s := fmt.Sprintf("{\"command\": [\"set_property\",\"volume\",%d]}\x0a",volconv[vol])
+	}
+	s := fmt.Sprintf("{\"command\": [\"set_property\",\"volume\",%d]}\x0a", volconv[vol])
 	Send(s)
 }
 
@@ -127,4 +125,3 @@ func Stop() {
 		Send("{\"command\": [\"stop\"]}\x0a")
 	}
 }
-
