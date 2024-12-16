@@ -23,7 +23,7 @@ import (
 const (
 	stationlist     string = "/usr/local/share/mpvradio/playlists/radio.m3u"
 	MPV_SOCKET_PATH string = "/run/user/1001/mpvsocket"
-	VERSIONMESSAGE  string = "Radio Ver 1.31"
+	VERSIONMESSAGE  string = "Radio Ver 1.32"
 )
 
 const (
@@ -122,7 +122,7 @@ var (
 	colon            uint8 = 0
 	pos              int   = 0
 	radio_enable     bool  = false
-	volume           int8  = 30
+	volume           int8  = mpvctl.Volume_max/2
 	display_colon          = []uint8{' ', ':'}
 	display_sleep          = []uint8{' ', ' ', 'S'}
 	display_buff     []byte
@@ -131,7 +131,7 @@ var (
 	display_volume           bool = false
 	display_volume_time      time.Time
 	display_volume_time_span time.Duration = 700 * 1000 * 1000
-
+	weekday	= []string{"Sun","Mon","Tue","Wed","Thu","Fri","Sat"}
 	clock_mode   uint8     = clock_mode_normal
 	alarm_time   time.Time = time.Date(2024, time.July, 4, 4, 50, 0, 0, time.UTC)
 	tuneoff_time time.Time = time.Unix(0, 0).UTC()
@@ -376,7 +376,7 @@ func alarm_time_dec() {
 func showclock() {
 	mu.Lock()
 	defer mu.Unlock()
-	var s, s0 string
+	var s, s0, dt string
 	// alarm
 	if clock_mode&1 == 1 {
 		if (state_cdx == state_alarm_hour_set || state_cdx == state_alarm_min_set) && colon == 1 {
@@ -403,21 +403,27 @@ func showclock() {
 		s = fmt.Sprintf("%s %c   %2d%c%02d", s0,
 			display_sleep[clock_mode&2],
 			n.Hour(), display_colon[colon], n.Minute())
+		dt = fmt.Sprintf("%04d-%02d-%02d (%s)",
+			n.Year(), n.Month(), n.Day(), weekday[n.Weekday()])
 	}
 	oled.PrintWithPos(0, 1, []byte(s))
 
 	// １行目の表示
 	// 文字列があふれる場合はスクロールする
 	// display_buff = mes + "  " + mes であることを前提としている
-	display_buff_len := len(display_buff)
-	if display_buff_len <= 16 {
-		oled.PrintWithPos(0, 0, display_buff)
-	} else {
-		oled.PrintWithPos(0, 0, display_buff[display_buff_pos:display_buff_pos+17])
-		display_buff_pos++
-		if display_buff_pos >= int16((display_buff_len/2)+1) {
-			display_buff_pos = 0
+	if radio_enable {
+		display_buff_len := len(display_buff)
+		if display_buff_len <= 16 {
+			oled.PrintWithPos(0, 0, display_buff)
+		} else {
+			oled.PrintWithPos(0, 0, display_buff[display_buff_pos:display_buff_pos+17])
+			display_buff_pos++
+			if display_buff_pos >= int16((display_buff_len/2)+1) {
+				display_buff_pos = 0
+			}
 		}
+	} else {
+		oled.PrintWithPos(0, 0, []byte(dt))
 	}
 }
 
