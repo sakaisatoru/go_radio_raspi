@@ -18,6 +18,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	//~ "github.com/sakaisatoru/weatherinfo"
 )
 
 const (
@@ -377,6 +378,7 @@ func showclock() {
 	mu.Lock()
 	defer mu.Unlock()
 	var s, s0, dt string
+	var md byte
 	// alarm
 	if clock_mode&1 == 1 {
 		if (state_cdx == state_alarm_hour_set || state_cdx == state_alarm_min_set) && colon == 1 {
@@ -395,14 +397,19 @@ func showclock() {
 	if time.Since(display_volume_time) >= display_volume_time_span {
 		display_volume = false
 	}
+	if state_cdx == state_aux {
+		md = 0x42 // B
+	} else {
+		md = 0x20
+	}
 	n := time.Now()
 	if display_volume {
-		s = fmt.Sprintf("volume:%2d  %2d%c%02d", volume,
-			n.Hour(), display_colon[colon], n.Minute())
+		s = fmt.Sprintf("vol:%2d   %c %2d%c%02d", volume,
+			md, n.Hour(), display_colon[colon], n.Minute())
 	} else {
-		s = fmt.Sprintf("%s %c   %2d%c%02d", s0,
+		s = fmt.Sprintf("%s %c %c %2d%c%02d", s0,
 			display_sleep[clock_mode&2],
-			n.Hour(), display_colon[colon], n.Minute())
+			md, n.Hour(), display_colon[colon], n.Minute())
 		dt = fmt.Sprintf("%04d-%02d-%02d (%s)",
 			n.Year(), n.Month(), n.Day(), weekday[n.Weekday()])
 	}
