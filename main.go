@@ -18,13 +18,13 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	//~ "github.com/sakaisatoru/weatherinfo"
+	//~ "local.packages/weatherinfo"
 )
 
 const (
 	stationlist     string = "/usr/local/share/mpvradio/playlists/radio.m3u"
 	MPV_SOCKET_PATH string = "/run/user/1001/mpvsocket"
-	VERSIONMESSAGE  string = "Radio Ver 1.32"
+	VERSIONMESSAGE  string = "Radio Ver 1.33"
 )
 
 const (
@@ -104,6 +104,17 @@ const (
 )
 
 const (
+	display_info_default = iota
+	display_info_date
+	display_info_weather_1
+	display_info_weather_2
+	display_info_weather_3
+	display_info_weather_4
+	display_info_weather_5
+	display_info_end
+)
+
+const (
 	ERROR_HUP = iota
 	ERROR_MPV_CONN
 	ERROR_MPV_FAULT
@@ -123,7 +134,7 @@ var (
 	colon            uint8 = 0
 	pos              int   = 0
 	radio_enable     bool  = false
-	volume           int8  = mpvctl.Volume_max/2
+	volume           int8  = mpvctl.Volume_max/3
 	display_colon          = []uint8{' ', ':'}
 	display_sleep          = []uint8{' ', ' ', 'S'}
 	display_buff     []byte
@@ -136,6 +147,7 @@ var (
 	clock_mode   uint8     = clock_mode_normal
 	alarm_time   time.Time = time.Date(2024, time.July, 4, 4, 50, 0, 0, time.UTC)
 	tuneoff_time time.Time = time.Unix(0, 0).UTC()
+	display_info int = display_info_default
 	errmessage             = []string{"HUP             ",
 		"mpv conn error. ",
 		"mpv fault.      ",
@@ -261,11 +273,13 @@ func infoupdate(line uint8, m string) {
 	display_buff_pos = 0
 	if l >= 17 {
 		display_buff = append(t[:l], append([]byte("  "), t[:l]...)...)
-		oled.PrintWithPos(0, line, display_buff[:17])
 	} else {
 		s := append(t[:l], []byte("                ")...)
 		display_buff = s[:16]
-		oled.PrintWithPos(0, line, display_buff)
+		//~ oled.PrintWithPos(0, line, display_buff)
+	}
+	if display_info == display_info_default {
+		oled.PrintWithPos(0, line, display_buff[:17])
 	}
 }
 
@@ -332,6 +346,7 @@ func tune() {
 		err            error = nil
 	)
 	radio_enable = false
+	display_info = display_info_default
 	infoupdate(0, stlist[pos].Name)
 
 	args := strings.Split(stlist[pos].Url, "/")
@@ -397,11 +412,10 @@ func showclock() {
 	if time.Since(display_volume_time) >= display_volume_time_span {
 		display_volume = false
 	}
-	if state_cdx == state_aux {
-		md = 0x42 // B
-	} else {
-		md = 0x20
+	if md = 0x20;state_cdx == state_aux {
+		md += 0x22 // 0x20+0x22 == B
 	}
+		
 	n := time.Now()
 	if display_volume {
 		s = fmt.Sprintf("vol:%2d   %c %2d%c%02d", volume,
@@ -418,32 +432,55 @@ func showclock() {
 	// １行目の表示
 	// 文字列があふれる場合はスクロールする
 	// display_buff = mes + "  " + mes であることを前提としている
-	if radio_enable {
-		display_buff_len := len(display_buff)
-		if display_buff_len <= 16 {
-			oled.PrintWithPos(0, 0, display_buff)
-		} else {
-			oled.PrintWithPos(0, 0, display_buff[display_buff_pos:display_buff_pos+17])
-			display_buff_pos++
-			if display_buff_pos >= int16((display_buff_len/2)+1) {
-				display_buff_pos = 0
+	switch display_info {
+		case display_info_default:
+			if radio_enable {
+				display_buff_len := len(display_buff)
+				if display_buff_len <= 16 {
+					oled.PrintWithPos(0, 0, display_buff)
+				} else {
+					oled.PrintWithPos(0, 0, display_buff[display_buff_pos:display_buff_pos+17])
+					display_buff_pos++
+					if display_buff_pos >= int16((display_buff_len/2)+1) {
+						display_buff_pos = 0
+					}
+				}
+			} else {
+				oled.PrintWithPos(0, 0, []byte(errmessage[SPACE16]))
 			}
-		}
-	} else {
-		oled.PrintWithPos(0, 0, []byte(dt))
+
+		case display_info_date:
+			oled.PrintWithPos(0, 0, []byte(dt))
+			
+		case display_info_weather_1:
+			fallthrough
+		case display_info_weather_2:
+			fallthrough
+		case display_info_weather_3:
+			fallthrough
+		case display_info_weather_4:
+			fallthrough
+		case display_info_weather_5:
+			oled.PrintWithPos(0, 0, []byte(errmessage[SPACE16]))
+
 	}
 }
 
 func show_volume() {
 	mu.Lock()
 	defer mu.Unlock()
-	display_volume_time = time.Now()
-	display_volume = true
-
+	
+	var md byte
+	if md = 0x20;state_cdx == state_aux {
+		md += 0x22 // 0x20+0x22 == B
+	}
 	n := time.Now()
-	s := fmt.Sprintf("volume:%2d  %2d%c%02d", volume,
-		n.Hour(), display_colon[colon], n.Minute())
+	s := fmt.Sprintf("vol:%2d   %c %2d%c%02d", volume,
+			md, n.Hour(), display_colon[colon], n.Minute())
 	oled.PrintWithPos(0, 1, []byte(s))
+
+	display_volume_time = n
+	display_volume = true
 }
 
 func inc_volume() {
@@ -482,6 +519,7 @@ func next_tune() {
 }
 
 func next_station_repeat() {
+	display_info = display_info_default
 	if pos < stlen-1 {
 		pos++
 		infoupdate(0, stlist[pos].Name)
@@ -498,6 +536,7 @@ func prior_tune() {
 }
 
 func prior_station_repeat() {
+	display_info = display_info_default
 	if pos > 0 {
 		pos--
 		infoupdate(0, stlist[pos].Name)
@@ -609,7 +648,7 @@ func main() {
 			mpvctl.Stop()
 		}
 		rpio.Pin(23).High() // AF amp enable
-		infoupdate(0, errmessage[BT_SPEAKER])
+		//~ infoupdate(0, errmessage[BT_SPEAKER])
 		state_cdx = state_aux
 		return false
 	}
@@ -629,7 +668,7 @@ func main() {
 	state_event[state_aux].btn_select_click.cb = func() bool {
 		// ここにペアリング先の再生を止める処理を置く
 		rpio.Pin(23).Low() // AF amp disable
-		infoupdate(0, errmessage[SPACE16])
+		//~ infoupdate(0, errmessage[SPACE16])
 		state_cdx = state_normal_mode
 		return false
 	}
@@ -663,6 +702,13 @@ func main() {
 			switch value {
 			default:
 
+			case irremote.Ir_A:
+				// 表示切り替え
+				display_info++
+				if display_info >= display_info_end {
+					display_info = display_info_default
+				}
+				
 			case irremote.Ir_C:
 				if state_cdx == state_aux {
 					state_event[state_aux].btn_select_click.do_handler()
