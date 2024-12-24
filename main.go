@@ -10,6 +10,7 @@ import (
 	"local.packages/mpvctl"
 	"local.packages/netradio"
 	"local.packages/rotaryencoder"
+	"local.packages/weatherinfo"
 	"log"
 	"os"
 	"os/exec"
@@ -18,7 +19,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	//~ "local.packages/weatherinfo"
 )
 
 const (
@@ -134,7 +134,7 @@ var (
 	colon            uint8 = 0
 	pos              int   = 0
 	radio_enable     bool  = false
-	volume           int8  = mpvctl.Volume_max/3
+	volume           int8  = mpvctl.Volume_max / 3
 	display_colon          = []uint8{' ', ':'}
 	display_sleep          = []uint8{' ', ' ', 'S'}
 	display_buff     []byte
@@ -143,12 +143,12 @@ var (
 	display_volume           bool = false
 	display_volume_time      time.Time
 	display_volume_time_span time.Duration = 700 * 1000 * 1000
-	weekday	= []string{"Sun","Mon","Tue","Wed","Thu","Fri","Sat"}
-	clock_mode   uint8     = clock_mode_normal
-	alarm_time   time.Time = time.Date(2024, time.July, 4, 4, 50, 0, 0, time.UTC)
-	tuneoff_time time.Time = time.Unix(0, 0).UTC()
-	display_info int = display_info_default
-	errmessage             = []string{"HUP             ",
+	weekday                                = []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
+	clock_mode               uint8         = clock_mode_normal
+	alarm_time               time.Time     = time.Date(2024, time.July, 4, 4, 50, 0, 0, time.UTC)
+	tuneoff_time             time.Time     = time.Unix(0, 0).UTC()
+	display_info             int           = display_info_default
+	errmessage                             = []string{"HUP             ",
 		"mpv conn error. ",
 		"mpv fault.      ",
 		"                ",
@@ -412,10 +412,10 @@ func showclock() {
 	if time.Since(display_volume_time) >= display_volume_time_span {
 		display_volume = false
 	}
-	if md = 0x20;state_cdx == state_aux {
+	if md = 0x20; state_cdx == state_aux {
 		md += 0x22 // 0x20+0x22 == B
 	}
-		
+
 	n := time.Now()
 	if display_volume {
 		s = fmt.Sprintf("vol:%2d   %c %2d%c%02d", volume,
@@ -433,35 +433,44 @@ func showclock() {
 	// 文字列があふれる場合はスクロールする
 	// display_buff = mes + "  " + mes であることを前提としている
 	switch display_info {
-		case display_info_default:
-			if radio_enable {
-				display_buff_len := len(display_buff)
-				if display_buff_len <= 16 {
-					oled.PrintWithPos(0, 0, display_buff)
-				} else {
-					oled.PrintWithPos(0, 0, display_buff[display_buff_pos:display_buff_pos+17])
-					display_buff_pos++
-					if display_buff_pos >= int16((display_buff_len/2)+1) {
-						display_buff_pos = 0
-					}
-				}
+	case display_info_default:
+		if radio_enable {
+			display_buff_len := len(display_buff)
+			if display_buff_len <= 16 {
+				oled.PrintWithPos(0, 0, display_buff)
 			} else {
-				oled.PrintWithPos(0, 0, []byte(errmessage[SPACE16]))
+				oled.PrintWithPos(0, 0, display_buff[display_buff_pos:display_buff_pos+17])
+				display_buff_pos++
+				if display_buff_pos >= int16((display_buff_len/2)+1) {
+					display_buff_pos = 0
+				}
 			}
-
-		case display_info_date:
-			oled.PrintWithPos(0, 0, []byte(dt))
-			
-		case display_info_weather_1:
-			fallthrough
-		case display_info_weather_2:
-			fallthrough
-		case display_info_weather_3:
-			fallthrough
-		case display_info_weather_4:
-			fallthrough
-		case display_info_weather_5:
+		} else {
 			oled.PrintWithPos(0, 0, []byte(errmessage[SPACE16]))
+		}
+
+	case display_info_date:
+		oled.PrintWithPos(0, 0, []byte(dt))
+
+	case display_info_weather_1:
+		fallthrough
+	case display_info_weather_2:
+		fallthrough
+	case display_info_weather_3:
+		fallthrough
+	case display_info_weather_4:
+		fallthrough
+	case display_info_weather_5:
+		display_buff_len := len(display_buff)
+		if display_buff_len <= 16 {
+			oled.PrintWithPos(0, 0, display_buff)
+		} else {
+			oled.PrintWithPos(0, 0, display_buff[display_buff_pos:display_buff_pos+17])
+			display_buff_pos++
+			if display_buff_pos >= int16((display_buff_len/2)+1) {
+				display_buff_pos = 0
+			}
+		}
 
 	}
 }
@@ -469,14 +478,14 @@ func showclock() {
 func show_volume() {
 	mu.Lock()
 	defer mu.Unlock()
-	
+
 	var md byte
-	if md = 0x20;state_cdx == state_aux {
+	if md = 0x20; state_cdx == state_aux {
 		md += 0x22 // 0x20+0x22 == B
 	}
 	n := time.Now()
 	s := fmt.Sprintf("vol:%2d   %c %2d%c%02d", volume,
-			md, n.Hour(), display_colon[colon], n.Minute())
+		md, n.Hour(), display_colon[colon], n.Minute())
 	oled.PrintWithPos(0, 1, []byte(s))
 
 	display_volume_time = n
@@ -623,6 +632,11 @@ func main() {
 	stlen = setup_station_list()
 	go netradio.Radiko_setup(stlist)
 
+	// 天気予報
+	foreloc := "埼玉県和光市"
+	ul, _ := weatherinfo.ForecastUrlTargetArea(foreloc)
+	w := weatherinfo.New()
+
 	if err := mpvctl.Open(MPV_SOCKET_PATH); err != nil {
 		infoupdate(0, errmessage[ERROR_MPV_CONN])
 		infoupdate(1, errmessage[ERROR_HUP])
@@ -708,17 +722,63 @@ func main() {
 				if display_info >= display_info_end {
 					display_info = display_info_default
 				}
-				
+				//~ fmt.Printf("display_info:%d\n", display_info)
+				var (
+					label *string
+					fore  *weatherinfo.Forecast
+				)
+				switch display_info {
+				case display_info_default:
+					infoupdate(0, errmessage[SPACE16])
+				case display_info_weather_1:
+					if err = w.GetWeatherInfo((*ul)[foreloc], foreloc); err == nil {
+						// 警報・注意報
+						if len(w.Warning) < 1 {
+							infoupdate(0, "ｹｲﾎｳﾁｭｳｲﾎｳ ﾅｼ")
+						} else {
+							for i := 0; i < len(w.Warning); i++ {
+								al := strings.Split(w.Warning[i].AlarmType, "、")
+								for j := 0; j < len(al); j++ {
+									al[j] = weatherinfo.KanaName[al[j]]
+								}
+								stmp := strings.TrimRight(strings.Join(al, ","), ",")
+								infoupdate(0, fmt.Sprintf("%s %s\n", weatherinfo.KanaName[w.Warning[i].Label], stmp))
+							}
+						}
+					} else {
+						// 天気予報取得失敗
+						display_info = display_info_default
+					}
+
+				case display_info_weather_2:
+					label, fore = w.GetHoursLaterInfo(1)
+				case display_info_weather_3:
+					label, fore = w.GetHoursLaterInfo(6)
+				case display_info_weather_4:
+					label, fore = w.GetHoursLaterInfo(12)
+				case display_info_weather_5:
+					label, fore = w.GetHoursLaterInfo(18)
+				}
+				if display_info >= display_info_weather_2 && display_info <= display_info_weather_5 {
+					//~ stmp := fmt.Sprintf("%s  %s ｷｵﾝ %dﾟC ｺｳｽｲﾘｮｳ%.1fmm ﾌｳｿｸ%dm/s",
+					infoupdate(0, fmt.Sprintf("%s  %s %dﾟC",
+						*label,
+						weatherinfo.KanaName[fore.Weather],
+						fore.Termperature))
+					//~ fore.Precipitation,
+					//~ fore.Speed))
+				}
+
 			case irremote.Ir_C:
 				if state_cdx == state_aux {
 					state_event[state_aux].btn_select_click.do_handler()
 				} else {
 					state_event[state_normal_mode].btn_select_press.do_handler()
 				}
-			
+
 			case irremote.Ir_Center:
 				state_event[state_cdx].btn_mode_click.do_handler()
-			
+
 			case irremote.Ir_Center | irremote.Ir_Holdflag:
 				state_event[state_cdx].btn_mode_press.do_handler()
 
@@ -767,11 +827,13 @@ func main() {
 
 		case title := <-mpvret:
 			// mpv の応答でフィルタで処理された文字列をここで処理する
-			stmp := stlist[pos].Name
-			if title != "" {
-				stmp = stmp + "  " + title
+			if display_info == display_info_default {
+				stmp := stlist[pos].Name
+				if title != "" {
+					stmp = stmp + "  " + title
+				}
+				infoupdate(0, stmp)
 			}
-			infoupdate(0, stmp)
 
 		case <-colonblink.C:
 			colon ^= 1
