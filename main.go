@@ -4,13 +4,13 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/davecheney/i2c"
+	"github.com/sakaisatoru/weatherinfo"
 	"github.com/stianeikeland/go-rpio/v4"
 	"local.packages/aqm1602y"
 	"local.packages/irremote"
 	"local.packages/mpvctl"
 	"local.packages/netradio"
 	"local.packages/rotaryencoder"
-	"local.packages/weatherinfo"
 	"log"
 	"os"
 	"os/exec"
@@ -646,7 +646,6 @@ func main() {
 	go netradio.Radiko_setup(stlist)
 
 	// 天気予報
-
 	weatherinfo.SetWorkingDir(WEATHER_WORKING_DIR)
 	forecast_area_ul, err = weatherinfo.ForecastUrlTargetArea(foreloc)
 	if err != nil {
