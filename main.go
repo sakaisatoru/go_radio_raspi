@@ -568,7 +568,7 @@ func info_forecast() string {
 
 		case display_info_weather_2, display_info_weather_3,
 			display_info_weather_4, display_info_weather_5:
-			after_hour := []int{1, 16, 12, 18}
+			after_hour := []int{1, 6, 12, 18}
 			label, fore = weather_i.GetHoursLaterInfo(after_hour[display_info-display_info_weather_2])
 			rs = fmt.Sprintf("%s  %s %dﾟC",
 				*label,
