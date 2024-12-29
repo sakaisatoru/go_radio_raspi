@@ -6,6 +6,12 @@ import (
 	"strings"
 )
 
+var (
+	forecastinfo_enable      bool = true
+	forecast_area_ul         *map[string]string
+	foreloc                  string = "埼玉県和光市"
+)
+
 func info_forecast() string {
 	var (
 		label *string

@@ -28,7 +28,7 @@ const (
 	stationlist         string = "/usr/local/share/mpvradio/playlists/radio.m3u"
 	MPV_SOCKET_PATH     string = "/run/user/1001/mpvsocket"
 	WEATHER_WORKING_DIR string = "/run/user/1001/weatherinfo"
-	VERSIONMESSAGE      string = "Radio Ver 1.43"
+	VERSIONMESSAGE      string = "Radio Ver 1.44"
 )
 
 const (
@@ -154,11 +154,8 @@ var (
 	tuneoff_time             time.Time     = time.Unix(0, 0).UTC()
 	display_info             int           = display_info_default
 	mpv_infovalue            string
-	forecastinfo_enable      bool = true
 	weather_i                *weatherinfo.Weatherinfo3
-	forecast_area_ul         *map[string]string
-	foreloc                  string = "埼玉県和光市"
-	errmessage                      = []string{"HUP             ",
+	errmessage               = []string{"HUP             ",
 		"mpv conn error. ",
 		"mpv fault.      ",
 		"                ",
@@ -604,13 +601,15 @@ func main() {
 	go netradio.Radiko_setup(stlist)
 
 	// 天気予報
-	weatherinfo.SetWorkingDir(WEATHER_WORKING_DIR)
-	forecast_area_ul, err = weatherinfo.ForecastUrlTargetArea(foreloc)
-	if err != nil {
-		log.Println("weatherinfo.ForecastUrlTargetArea", err)
-		forecastinfo_enable = false
-	}
-	weather_i = weatherinfo.New()
+	go func() {
+		weatherinfo.SetWorkingDir(WEATHER_WORKING_DIR)
+		forecast_area_ul, err = weatherinfo.ForecastUrlTargetArea(foreloc)
+		if err != nil {
+			log.Println("weatherinfo.ForecastUrlTargetArea", err)
+			forecastinfo_enable = false
+		}
+		weather_i = weatherinfo.New()
+	}()
 
 	// mpv socket
 	if err := mpvctl.Open(MPV_SOCKET_PATH); err != nil {
