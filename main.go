@@ -21,6 +21,9 @@ import (
 	"time"
 )
 
+// forecast.go
+//	func info_forecast() string
+
 const (
 	stationlist         string = "/usr/local/share/mpvradio/playlists/radio.m3u"
 	MPV_SOCKET_PATH     string = "/run/user/1001/mpvsocket"
@@ -533,51 +536,6 @@ func cb_mpvrecv(ms mpvctl.MpvIRC) (string, bool) {
 	return "", false
 }
 
-// 天気予報を文字列で返す
-func info_forecast() string {
-	var (
-		label *string
-		fore  *weatherinfo.Forecast
-		rs    string
-	)
-	if forecastinfo_enable == false {
-		rs = "ｹﾞﾝｻﾞｲﾃﾝｷﾖﾎｳﾊｼｭﾄｷﾃﾞｷﾏｾﾝ"
-	} else {
-		switch display_info {
-		case display_info_weather_1:
-			if err := weather_i.GetWeatherInfo((*forecast_area_ul)[foreloc], foreloc); err == nil {
-				// 警報・注意報
-				if len(weather_i.Warning) < 1 {
-					rs = "ｹｲﾎｳﾁｭｳｲﾎｳ ﾅｼ"
-				} else {
-					for i := 0; i < len(weather_i.Warning); i++ {
-						al := strings.Split(weather_i.Warning[i].AlarmType, "、")
-						for j := 0; j < len(al); j++ {
-							al[j] = weatherinfo.KanaName[al[j]]
-						}
-						stmp := strings.TrimRight(strings.Join(al, ","), ",")
-						rs = fmt.Sprintf("%s %s\n",
-							weatherinfo.KanaName[weather_i.Warning[i].Label], stmp)
-					}
-				}
-			} else {
-				// 天気予報取得失敗
-				display_info = display_info_default
-				rs = errmessage[DIR_NOT_READY]
-			}
-
-		case display_info_weather_2, display_info_weather_3,
-			display_info_weather_4, display_info_weather_5:
-			after_hour := []int{1, 6, 12, 18}
-			label, fore = weather_i.GetHoursLaterInfo(after_hour[display_info-display_info_weather_2])
-			rs = fmt.Sprintf("%s  %s %dﾟC",
-				*label,
-				weatherinfo.KanaName[fore.Weather], fore.Termperature)
-		}
-	}
-	return rs
-}
-
 func main() {
 	if err := rpio.Open(); err != nil {
 		infoupdate(0, errmessage[ERROR_RPIO_NOT_OPEN])
@@ -736,24 +694,28 @@ func main() {
 			default:
 
 			case irremote.Ir_A:
-				// 表示切り替え
+				// OLED１行目の表示切り替え
 				display_info++
 				if display_info >= display_info_end {
 					display_info = display_info_default
 				}
 				switch display_info {
 				case display_info_default:
+					// デフォルトではバッファ(mpv_infovalue)を表示する。
+					// バッファは大抵の場合、局名と再生中の曲情報を保持している。
 					if radio_enable {
 						infoupdate(0, mpv_infovalue)
 					} else {
 						infoupdate(0, errmessage[SPACE16])
 					}
 				case display_info_date:
+					// 日付
 					n := time.Now()
 					infoupdate(0, fmt.Sprintf("%04d-%02d-%02d (%s)",
 						n.Year(), n.Month(), n.Day(), weekday[n.Weekday()]))
 
 				default:
+					// 天気予報
 					infoupdate(0, info_forecast())
 				}
 
