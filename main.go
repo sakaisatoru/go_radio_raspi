@@ -367,6 +367,9 @@ func tune() {
 			break
 		}
 		if err != nil {
+			mpv_infovalue = errmessage[ERROR_TUNING]
+			infoupdate(0, mpv_infovalue)
+			log.Println("tune() ",err)
 			return
 		}
 	} else {
@@ -604,7 +607,7 @@ func main() {
 	go setup_forecast("埼玉県和光市")
 
 	// mpv socket
-	if err := mpvctl.Open(MPV_SOCKET_PATH); err != nil {
+	if err := mpvctl.Open(); err != nil {
 		infoupdate(0, errmessage[ERROR_MPV_CONN])
 		infoupdate(1, errmessage[ERROR_HUP])
 		log.Fatal(err) // time out
@@ -752,9 +755,6 @@ func main() {
 		case <-signals:
 			mpvctl.Close()
 			if err = mpvctl.Mpvkill(); err != nil {
-				log.Println(err)
-			}
-			if err = os.Remove(MPV_SOCKET_PATH); err != nil {
 				log.Println(err)
 			}
 			rpio.Pin(23).Low() // AF amp disable

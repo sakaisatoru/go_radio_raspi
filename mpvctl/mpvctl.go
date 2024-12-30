@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -38,20 +39,22 @@ var (
 	mpv        net.Conn
 	mpvprocess *exec.Cmd
 	//~ volconv    = []int8{0, 2, 4, 5, 6, 7, 8, 9, 10, 11,
-		//~ 12, 13, 13, 14, 15, 16, 16, 17, 18, 18,
-		//~ 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
-		//~ 29, 30, 32, 33, 35, 36, 38, 40, 42, 45,
-		//~ 47, 50, 53, 57, 61, 66, 71, 78, 85, 100}
-	volconv    = []int8{0, 4, 8, 12, 16,
-		20, 24, 28, 32, 36,  40, 44, 48, 52, 56,
-		60, 64, 68, 72, 76,  80, 84, 88, 92, 96, 100}
+	//~ 12, 13, 13, 14, 15, 16, 16, 17, 18, 18,
+	//~ 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
+	//~ 29, 30, 32, 33, 35, 36, 38, 40, 42, 45,
+	//~ 47, 50, 53, 57, 61, 66, 71, 78, 85, 100}
+	volconv = []int8{0, 4, 8, 12, 16,
+		20, 24, 28, 32, 36, 40, 44, 48, 52, 56,
+		60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100}
 	Volume_min      int8 = 0
 	Volume_max      int8 = int8(len(volconv) - 1)
 	readbuf              = make([]byte, IRCbuffsize)
 	Cb_connect_stop      = func() bool { return false }
+	socketpath      string
 )
 
-func Init(socketpath string) error {
+func Init(s string) error {
+	socketpath = s
 	mpvprocess = exec.Command("/usr/bin/mpv", MPVOPTION1,
 		MPVOPTION2+socketpath,
 		MPVOPTION3, MPVOPTION4,
@@ -62,13 +65,17 @@ func Init(socketpath string) error {
 
 func Mpvkill() error {
 	err := mpvprocess.Process.Kill()
-	return err
+	e2 := os.Remove(socketpath)
+	if err != nil {
+		return err
+	}
+	return e2
 }
 
-func Open(socket_path string) error {
+func Open() error {
 	var err error
 	for i := 0; ; i++ {
-		mpv, err = net.Dial("unix", socket_path)
+		mpv, err = net.Dial("unix", socketpath)
 		if err == nil {
 			break
 		}
