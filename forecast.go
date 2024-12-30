@@ -1,16 +1,29 @@
 package main
 
 import (
-	"github.com/sakaisatoru/weatherinfo"
 	"fmt"
+	"github.com/sakaisatoru/weatherinfo"
+	"log"
 	"strings"
 )
 
 var (
-	forecastinfo_enable      bool = true
-	forecast_area_ul         *map[string]string
-	foreloc                  string = "埼玉県和光市"
+	forecastinfo_enable bool = true
+	forecast_area_ul    *map[string]string
+	foreloc             string
 )
+
+func setup_forecast(loc string) {
+	var err error
+	weatherinfo.SetWorkingDir(WEATHER_WORKING_DIR)
+	foreloc = loc
+	forecast_area_ul, err = weatherinfo.ForecastUrlTargetArea(foreloc)
+	if err != nil {
+		log.Println("weatherinfo.ForecastUrlTargetArea", err)
+		forecastinfo_enable = false
+	}
+	weather_i = weatherinfo.New()
+}
 
 func info_forecast() string {
 	var (

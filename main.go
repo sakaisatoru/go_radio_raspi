@@ -28,7 +28,7 @@ const (
 	stationlist         string = "/usr/local/share/mpvradio/playlists/radio.m3u"
 	MPV_SOCKET_PATH     string = "/run/user/1001/mpvsocket"
 	WEATHER_WORKING_DIR string = "/run/user/1001/weatherinfo"
-	VERSIONMESSAGE      string = "Radio Ver 1.44"
+	VERSIONMESSAGE      string = "Radio Ver 1.45"
 )
 
 const (
@@ -600,16 +600,8 @@ func main() {
 	stlen = setup_station_list()
 	go netradio.Radiko_setup(stlist)
 
-	// 天気予報
-	go func() {
-		weatherinfo.SetWorkingDir(WEATHER_WORKING_DIR)
-		forecast_area_ul, err = weatherinfo.ForecastUrlTargetArea(foreloc)
-		if err != nil {
-			log.Println("weatherinfo.ForecastUrlTargetArea", err)
-			forecastinfo_enable = false
-		}
-		weather_i = weatherinfo.New()
-	}()
+	// 天気予報取得の準備
+	go setup_forecast("埼玉県和光市")
 
 	// mpv socket
 	if err := mpvctl.Open(MPV_SOCKET_PATH); err != nil {
@@ -709,9 +701,7 @@ func main() {
 					}
 				case display_info_date:
 					// 日付
-					n := time.Now()
-					infoupdate(0, fmt.Sprintf("%04d-%02d-%02d (%s)",
-						n.Year(), n.Month(), n.Day(), weekday[n.Weekday()]))
+					// 実際の表示は時刻表示の際に更新する
 
 				default:
 					// 天気予報
@@ -786,6 +776,11 @@ func main() {
 			}
 
 		case <-colonblink.C:
+			if display_info == display_info_date {
+				n := time.Now()
+				infoupdate(0, fmt.Sprintf("%04d-%02d-%02d (%s)",
+					n.Year(), n.Month(), n.Day(), weekday[n.Weekday()]))
+			}
 			colon ^= 1
 			showclock()
 
