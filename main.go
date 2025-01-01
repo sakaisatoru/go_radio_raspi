@@ -21,14 +21,13 @@ import (
 	"time"
 )
 
-// forecast.go
-//	func info_forecast() string
-
 const (
 	stationlist         string = "/usr/local/share/mpvradio/playlists/radio.m3u"
 	MPV_SOCKET_PATH     string = "/run/user/1001/mpvsocket"
 	WEATHER_WORKING_DIR string = "/run/user/1001/weatherinfo"
-	VERSIONMESSAGE      string = "Radio Ver 1.45"
+	FORECASTLOCATION	string = "埼玉県和光市"
+	VERSIONMESSAGE      string = "Radio Ver 1.46"
+	//~ VERSIONMESSAGE string = "Radio Ver test"
 )
 
 const (
@@ -369,7 +368,7 @@ func tune() {
 		if err != nil {
 			mpv_infovalue = errmessage[ERROR_TUNING]
 			infoupdate(0, mpv_infovalue)
-			log.Println("tune() ",err)
+			log.Println("tune() ", err)
 			return
 		}
 	} else {
@@ -604,7 +603,7 @@ func main() {
 	go netradio.Radiko_setup(stlist)
 
 	// 天気予報取得の準備
-	go setup_forecast("埼玉県和光市")
+	go setup_forecast(FORECASTLOCATION)
 
 	// mpv socket
 	if err := mpvctl.Open(); err != nil {
@@ -683,74 +682,18 @@ func main() {
 				}
 			}
 
-		case value := <-irch:
-			switch value {
-			default:
-
-			case irremote.Ir_A:
-				// OLED１行目の表示切り替え
-				display_info++
-				if display_info >= display_info_end {
-					display_info = display_info_default
+			// リモコンがエッジを検出しないので、最後の選局ボタンリピート押下から
+			// 一定時間(リモコンのリピート押下判定時間以上)が経過したら選局する事とする
+			if irrepeat_on {
+				if time.Since(irrepeat_time) >= irremote.T_span*3 {
+					irrepeat_on = false
+					tune()
 				}
-				switch display_info {
-				case display_info_default:
-					// デフォルトではバッファ(mpv_infovalue)を表示する。
-					// バッファは大抵の場合、局名と再生中の曲情報を保持している。
-					if radio_enable {
-						infoupdate(0, mpv_infovalue)
-					} else {
-						infoupdate(0, errmessage[SPACE16])
-					}
-				case display_info_date:
-					// 日付
-					// 実際の表示は時刻表示の際に更新する
-
-				default:
-					// 天気予報
-					infoupdate(0, info_forecast())
-				}
-
-			case irremote.Ir_C:
-				if state_cdx == state_aux {
-					state_event[state_aux].btn_select_click.do_handler()
-				} else {
-					state_event[state_normal_mode].btn_select_press.do_handler()
-				}
-
-			case irremote.Ir_Center:
-				state_event[state_cdx].btn_mode_click.do_handler()
-
-			case irremote.Ir_Center | irremote.Ir_Holdflag:
-				state_event[state_cdx].btn_mode_press.do_handler()
-
-			case irremote.Ir_N:
-				state_event[state_cdx].btn_prior_click.do_handler()
-
-			case irremote.Ir_N | irremote.Ir_Holdflag:
-				state_event[state_cdx].btn_prior_repeat.do_handler()
-
-			case irremote.Ir_S:
-				state_event[state_cdx].btn_next_click.do_handler()
-
-			case irremote.Ir_S | irremote.Ir_Holdflag:
-				state_event[state_cdx].btn_next_repeat.do_handler()
-
-			case irremote.Ir_NW:
-				inc_volume()
-
-			case irremote.Ir_NW | irremote.Ir_Holdflag:
-				inc_volume()
-
-			case irremote.Ir_SW:
-				dec_volume()
-
-			case irremote.Ir_SW | irremote.Ir_Holdflag:
-				dec_volume()
-
-			case irremote.Ir_Power:
-				state_event[state_cdx].btn_select_click.do_handler()
 			}
+
+		case value := <-irch:
+			irrepeat_on = false
+			irfunc[value]()
 
 		case <-signals:
 			mpvctl.Close()

@@ -29,6 +29,8 @@ const (
 	Ir_NW       = 0x10B1
 	Ir_Center   = 0x1020
 	Ir_Holdflag = 0x10000
+
+	T_span time.Duration = 110 * 1e6 // 110ms
 )
 
 var (
@@ -47,9 +49,8 @@ func Close() {
 
 func Read(ch chan<- int32) {
 	var (
-		buf    = make([]byte, 24)
-		ev     *Input_event
-		t_span time.Duration = 110 * 1e6 // 110ms
+		buf = make([]byte, 24)
+		ev  *Input_event
 	)
 	hold_span := 8
 	hold_count := 0
@@ -66,7 +67,7 @@ func Read(ch chan<- int32) {
 		}
 		ev = (*Input_event)(unsafe.Pointer(&buf[0]))
 		if ev.Type == unix.EV_MSC {
-			if ev.Value != old.Value || time.Since(t_start) > t_span {
+			if ev.Value != old.Value || time.Since(t_start) > T_span {
 				release = true
 				hold = false
 				hold_count = 0
@@ -90,6 +91,8 @@ func Read(ch chan<- int32) {
 				hold_count++
 				if hold_count > hold_span {
 					hold = true
+					ch <- (ev.Value | Ir_Holdflag)
+					continue
 				}
 			}
 		}
