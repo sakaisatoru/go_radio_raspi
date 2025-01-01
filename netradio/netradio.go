@@ -39,24 +39,34 @@ func PrepareStationList(st string) ([]*StationInfo, error) {
 	f := false
 	s := ""
 	name := ""
-
+	extflag := false
+	
 	for scanner.Scan() {
-		s = scanner.Text()
-		if strings.Contains(s, "#EXTINF:") == true {
+		s = strings.TrimLeft(scanner.Text()," ")
+		if strings.Contains(s, "#EXTM3U") {
+			extflag = true
+			continue
+		}
+		if strings.Contains(s, "#EXTINF:") && extflag {
 			f = true
 			_, name, _ = strings.Cut(s, "/")
 			name = strings.Trim(name, " ")
 			continue
 		}
-		if f {
-			if len(s) != 0 {
+		if len(s) != 0 {
+			if s[:1] == "#" {
+				continue
+			} 
+			stmp := new(StationInfo)
+			stmp.Url = s
+			if f {
 				f = false
-				stmp := new(StationInfo)
-				stmp.Url = s
 				// UTF-8 対応で rune　で数える
 				stmp.Name = string([]rune(name + "                ")[:16])
-				stlist = append(stlist, stmp)
+			} else {
+				stmp.Name = ""
 			}
+			stlist = append(stlist, stmp)
 		}
 	}
 	return stlist, err
