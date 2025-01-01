@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"github.com/davecheney/i2c"
 	"github.com/sakaisatoru/weatherinfo"
@@ -25,8 +24,8 @@ const (
 	stationlist         string = "/usr/local/share/mpvradio/playlists/radio.m3u"
 	MPV_SOCKET_PATH     string = "/run/user/1001/mpvsocket"
 	WEATHER_WORKING_DIR string = "/run/user/1001/weatherinfo"
-	FORECASTLOCATION	string = "埼玉県和光市"
-	VERSIONMESSAGE      string = "Radio Ver 1.46"
+	FORECASTLOCATION    string = "埼玉県和光市"
+	VERSIONMESSAGE      string = "Radio Ver 1.47"
 	//~ VERSIONMESSAGE string = "Radio Ver test"
 )
 
@@ -128,6 +127,7 @@ const (
 	BT_SPEAKER
 	IR_NOT_OPEN
 	DIR_NOT_READY
+	FILE_NOT_OPEN
 )
 
 var (
@@ -163,7 +163,8 @@ var (
 		"socket not open.",
 		"BT Speaker mode ",
 		"Ir not open.    ",
-		"dir not ready.  "}
+		"dir not ready.  ",
+		"file not open.  "}
 	btnscan         = []rpio.Pin{26, 5, 6, 22, 17, 27}
 	state_cdx   int = state_normal_mode
 	state_event     = [statelength]stateEventhandlers{
@@ -237,39 +238,6 @@ var (
 			eventhandler{cb: _false, dflt: _blank}},
 	}
 )
-
-func setup_station_list() int {
-	file, err := os.Open(stationlist)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	f := false
-	s := ""
-	name := ""
-	for scanner.Scan() {
-		s = scanner.Text()
-		if strings.Contains(s, "#EXTINF:") == true {
-			f = true
-			_, name, _ = strings.Cut(s, "/")
-			name = strings.Trim(name, " ")
-			continue
-		}
-		if f {
-			if len(s) != 0 {
-				f = false
-				stmp := new(netradio.StationInfo)
-				stmp.Url = s
-				// UTF-8 対応で rune　で数える
-				stmp.Name = string([]rune(name + "                ")[:16])
-				stlist = append(stlist, stmp)
-			}
-		}
-	}
-	return len(stlist)
-}
 
 func infoupdate(line uint8, m string) {
 	// 引数 line は互換性維持のためだけに残された
@@ -599,7 +567,13 @@ func main() {
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGQUIT,
 		syscall.SIGHUP, syscall.SIGINT) // syscall.SIGUSR1
 
-	stlen = setup_station_list()
+	stlist, err = netradio.PrepareStationList(stationlist)
+	if err != nil {
+		infoupdate(0, errmessage[FILE_NOT_OPEN])
+		infoupdate(1, errmessage[ERROR_HUP])
+		log.Fatal(err)
+	}
+	stlen = len(stlist)
 	go netradio.Radiko_setup(stlist)
 
 	// 天気予報取得の準備

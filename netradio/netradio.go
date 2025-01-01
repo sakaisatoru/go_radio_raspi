@@ -1,6 +1,7 @@
 package netradio
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -21,6 +22,45 @@ const (
 	auth_key  string = "bcd151073c03b352e1ef2fd66c32209da9ca0afa" // 現状は固有 key_lenght = 0
 	tokenfile string = "/run/radiko_token"
 )
+
+func PrepareStationList(st string) ([]*StationInfo, error) {
+	var (
+		file   *os.File
+		err    error
+		stlist []*StationInfo
+	)
+	file, err = os.Open(st)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	f := false
+	s := ""
+	name := ""
+
+	for scanner.Scan() {
+		s = scanner.Text()
+		if strings.Contains(s, "#EXTINF:") == true {
+			f = true
+			_, name, _ = strings.Cut(s, "/")
+			name = strings.Trim(name, " ")
+			continue
+		}
+		if f {
+			if len(s) != 0 {
+				f = false
+				stmp := new(StationInfo)
+				stmp.Url = s
+				// UTF-8 対応で rune　で数える
+				stmp.Name = string([]rune(name + "                ")[:16])
+				stlist = append(stlist, stmp)
+			}
+		}
+	}
+	return stlist, err
+}
 
 func gen_temp_chunk_m3u8_url(url string, auth_token string) (string, error) {
 	var (
