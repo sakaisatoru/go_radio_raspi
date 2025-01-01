@@ -659,7 +659,7 @@ func main() {
 			// リモコンがエッジを検出しないので、最後の選局ボタンリピート押下から
 			// 一定時間(リモコンのリピート押下判定時間以上)が経過したら選局する事とする
 			if irrepeat_on {
-				if time.Since(irrepeat_time) >= irremote.T_span*3 {
+				if time.Since(irrepeat_time) >= irremote.T_span*2 {
 					irrepeat_on = false
 					tune()
 				}
