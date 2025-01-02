@@ -11,6 +11,7 @@ import (
 	"local.packages/netradio"
 	"local.packages/rotaryencoder"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -25,7 +26,7 @@ const (
 	MPV_SOCKET_PATH     string = "/run/user/1001/mpvsocket"
 	WEATHER_WORKING_DIR string = "/run/user/1001/weatherinfo"
 	FORECASTLOCATION    string = "埼玉県和光市"
-	VERSIONMESSAGE      string = "Radio Ver 1.47"
+	VERSIONMESSAGE      string = "Radio Ver 1.50"
 	//~ VERSIONMESSAGE string = "Radio Ver test"
 )
 
@@ -387,7 +388,7 @@ func showclock() {
 		s0 = "      "
 	}
 	if md = 0x20; state_cdx == state_aux {
-		md += 0x22 // 0x20+0x22 == B
+		md += 0x35 // 0x20+0x22 == U
 	}
 	if time.Since(display_volume_time) >= display_volume_time_span {
 		display_volume = false
@@ -507,9 +508,14 @@ func main() {
 	if err := rpio.Open(); err != nil {
 		infoupdate(0, errmessage[ERROR_RPIO_NOT_OPEN])
 		infoupdate(1, errmessage[ERROR_HUP])
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
-	defer rpio.Close()
+	defer func() {
+		rpio.Pin(23).Low() // AF amp disable
+		rpio.Close()
+	}()
+
 	for _, sn := range btnscan {
 		sn.Input()
 		sn.PullUp()
@@ -521,12 +527,14 @@ func main() {
 	// OLED or LCD
 	i2c, err := i2c.New(0x3c, 1)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 	defer i2c.Close()
 	oled = aqm1602y.New(i2c)
 	oled.Configure()
 	oled.PrintWithPos(0, 0, []byte(VERSIONMESSAGE))
+	defer oled.DisplayOff()
 
 	// rotaryencoder
 	var rencoder rotaryencoder.RotaryEncoder
@@ -542,7 +550,8 @@ func main() {
 	if err := irremote.Open(); err != nil {
 		infoupdate(0, errmessage[IR_NOT_OPEN])
 		infoupdate(1, errmessage[ERROR_HUP])
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 	defer irremote.Close()
 	irch := make(chan int32)
@@ -552,7 +561,8 @@ func main() {
 	if err := mpvctl.Init(MPV_SOCKET_PATH); err != nil {
 		infoupdate(0, errmessage[ERROR_MPV_FAULT])
 		infoupdate(1, errmessage[ERROR_HUP])
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 
 	mpvctl.Cb_connect_stop = func() bool {
@@ -567,11 +577,13 @@ func main() {
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGQUIT,
 		syscall.SIGHUP, syscall.SIGINT) // syscall.SIGUSR1
 
+	// 局リストの準備
 	stlist, err = netradio.PrepareStationList(stationlist)
 	if err != nil {
 		infoupdate(0, errmessage[FILE_NOT_OPEN])
 		infoupdate(1, errmessage[ERROR_HUP])
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 	stlen = len(stlist)
 	go netradio.Radiko_setup(stlist)
@@ -583,8 +595,15 @@ func main() {
 	if err := mpvctl.Open(); err != nil {
 		infoupdate(0, errmessage[ERROR_MPV_CONN])
 		infoupdate(1, errmessage[ERROR_HUP])
-		log.Fatal(err) // time out
+		log.Println(err) // time out
+		return
 	}
+	defer func() {
+		mpvctl.Close()
+		if err := mpvctl.Mpvkill(); err != nil {
+			log.Println(err)
+		}
+	}()
 
 	mpvret := make(chan string)
 	go mpvctl.Recv(mpvret, cb_mpvrecv)
@@ -598,6 +617,18 @@ func main() {
 	go btninput(btncode)
 	rencode := make(chan rotaryencoder.REvector)
 	go rencoder.DetectLoop(rencode)
+
+	// 外部通信用socket
+	recvmessage := make(chan string)
+	ln, err := net.Listen("unix", serversocket)
+	if err != nil {
+		log.Println(err)
+		infoupdate(0, errmessage[ERROR_SOCKET_NOT_OPEN])
+	} else {
+		defer ln.Close()
+		defer os.Remove(serversocket)
+		go server(ln, recvmessage)
+	}
 
 	// radioからaux(BT Speaker mode)への遷移
 	state_event[state_normal_mode].btn_select_press.cb = func() bool {
@@ -665,21 +696,28 @@ func main() {
 				}
 			}
 
+		case value := <-recvmessage:
+			radio_enable = false
+			state_cdx = state_aux
+			mpvctl.Stop()
+			s = fmt.Sprintf("{\"command\": [\"loadfile\",\"%s\"]}\x0a", strings.TrimRight(value, "\x0a"))
+			//~ log.Println("mainloop go_radio ", s)
+			mpvctl.Send(s)
+			mpv_infovalue = fmt.Sprintf("AUX:%s", value)
+			if display_info == display_info_default {
+				infoupdate(0, mpv_infovalue)
+			}
+			rpio.Pin(23).High() // AF amp enable
+
 		case value := <-irch:
+			// 赤外線リモコンの処理
 			irrepeat_on = false
 			irfunc[value]()
 
 		case <-signals:
-			mpvctl.Close()
-			if err = mpvctl.Mpvkill(); err != nil {
-				log.Println(err)
-			}
-			rpio.Pin(23).Low() // AF amp disable
-			rpio.Close()
-			irremote.Close()
-			oled.DisplayOff()
+			// 強制終了など
 			close(signals)
-			os.Exit(0)
+			return
 
 		case title := <-mpvret:
 			// mpv の応答でフィルタで処理された文字列をここで処理する
