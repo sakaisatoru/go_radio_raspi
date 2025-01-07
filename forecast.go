@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	forecastinfo_enable bool = true
+	forecastinfo_enable bool = false
 	forecast_area_ul    *map[string]string
 	foreloc             string
 )
@@ -20,7 +20,8 @@ func setup_forecast(loc string) {
 	forecast_area_ul, err = weatherinfo.ForecastUrlTargetArea(foreloc)
 	if err != nil {
 		log.Println("weatherinfo.ForecastUrlTargetArea", err)
-		forecastinfo_enable = false
+	} else {
+		forecastinfo_enable = true
 	}
 	weather_i = weatherinfo.New()
 }

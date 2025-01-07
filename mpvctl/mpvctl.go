@@ -135,3 +135,8 @@ func Stop() {
 		Send("{\"command\": [\"stop\"]}\x0a")
 	}
 }
+
+func Loadfile(s string) {
+	Send(fmt.Sprintf("{\"command\": [\"loadfile\",\"%s\"]}\x0a", s))
+}
+

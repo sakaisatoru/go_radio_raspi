@@ -316,7 +316,7 @@ func btninput(code chan<- ButtonCode) {
 
 func tune() {
 	var (
-		station_url, s string
+		station_url  string
 		err            error = nil
 	)
 	radio_enable = false
@@ -345,8 +345,7 @@ func tune() {
 	}
 	mpvctl.Setvol(volume)
 
-	s = fmt.Sprintf("{\"command\": [\"loadfile\",\"%s\"]}\x0a", station_url)
-	mpvctl.Send(s)
+	mpvctl.Loadfile(station_url)
 	rpio.Pin(23).High() // AF amp enable
 	radio_enable = true
 }
@@ -567,6 +566,7 @@ func main() {
 
 	mpvctl.Cb_connect_stop = func() bool {
 		infoupdate(0, errmessage[SPACE16])
+		mpv_infovalue = errmessage[SPACE16]
 		rpio.Pin(23).Low() // AF amp disable
 		radio_enable = false
 		return false
@@ -636,7 +636,6 @@ func main() {
 			mpvctl.Stop()
 		}
 		rpio.Pin(23).High() // AF amp enable
-		//~ infoupdate(0, errmessage[BT_SPEAKER])
 		state_cdx = state_aux
 		return false
 	}
@@ -700,9 +699,7 @@ func main() {
 			radio_enable = false
 			state_cdx = state_aux
 			mpvctl.Stop()
-			s = fmt.Sprintf("{\"command\": [\"loadfile\",\"%s\"]}\x0a", strings.TrimRight(value, "\x0a"))
-			//~ log.Println("mainloop go_radio ", s)
-			mpvctl.Send(s)
+			mpvctl.Loadfile(strings.TrimRight(value, "\x0a"))
 			mpv_infovalue = fmt.Sprintf("AUX:%s", value)
 			if display_info == display_info_default {
 				infoupdate(0, mpv_infovalue)
@@ -712,7 +709,10 @@ func main() {
 		case value := <-irch:
 			// 赤外線リモコンの処理
 			irrepeat_on = false
-			irfunc[value]()
+			_,ok := irfunc[value]
+			if ok {
+				irfunc[value]()
+			}
 
 		case <-signals:
 			// 強制終了など
