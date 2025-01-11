@@ -26,7 +26,7 @@ const (
 	MPV_SOCKET_PATH     string = "/run/user/1001/mpvsocket"
 	WEATHER_WORKING_DIR string = "/run/user/1001/weatherinfo"
 	FORECASTLOCATION    string = "埼玉県和光市"
-	VERSIONMESSAGE      string = "Radio Ver 1.51"
+	VERSIONMESSAGE      string = "Radio Ver 1.52"
 	//~ VERSIONMESSAGE string = "Radio Ver test"
 )
 
@@ -512,6 +512,7 @@ func main() {
 	}
 	defer func() {
 		rpio.Pin(23).Low() // AF amp disable
+		rpio.Pin(23).PullDown()
 		rpio.Close()
 	}()
 
