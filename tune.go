@@ -44,6 +44,24 @@ func tune() {
 	radio_enable = true
 }
 
+func next_tune() {
+	if radio_enable == true {
+		if pos < stlen-1 {
+			pos++
+		}
+	}
+	tune()
+}
+
+func prior_tune() {
+	if radio_enable == true {
+		if pos > 0 {
+			pos--
+		}
+	}
+	tune()
+}
+
 func toggle_radio() {
 	if radio_enable {
 		mpvctl.Stop()

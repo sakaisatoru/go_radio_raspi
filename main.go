@@ -257,59 +257,8 @@ func infoupdate(line uint8, m string) {
 	oled.PrintWithPos(0, line, display_buff[:17])
 }
 
-func alarm_time_inc() {
-	if state_cdx == state_alarm_hour_set {
-		alarm_time = alarm_time.Add(1 * time.Hour)
-	} else {
-		alarm_time = alarm_time.Add(1 * time.Minute)
-	}
-}
 
-func alarm_time_dec() {
-	if state_cdx == state_alarm_min_set {
-		alarm_time = alarm_time.Add(59 * time.Minute)
-		// 時間が進んでしまうのでhourも補正する
-	}
-	alarm_time = alarm_time.Add(23 * time.Hour)
-}
 
-func show_volume() {
-	mu.Lock()
-	defer mu.Unlock()
-
-	s := fmt.Sprintf("vol:%2d", volume)
-	oled.PrintWithPos(0, 1, []byte(s))
-
-	display_volume_time = time.Now()
-	display_volume = true
-}
-
-func inc_volume() {
-	volume++
-	if volume > mpvctl.Volume_max {
-		volume = mpvctl.Volume_max
-	}
-	mpvctl.Setvol(volume)
-	show_volume()
-}
-
-func dec_volume() {
-	volume--
-	if volume < mpvctl.Volume_min {
-		volume = mpvctl.Volume_min
-	}
-	mpvctl.Setvol(volume)
-	show_volume()
-}
-
-func next_tune() {
-	if radio_enable == true {
-		if pos < stlen-1 {
-			pos++
-		}
-	}
-	tune()
-}
 
 func next_station_repeat() {
 	display_info = display_info_default
@@ -320,14 +269,6 @@ func next_station_repeat() {
 	}
 }
 
-func prior_tune() {
-	if radio_enable == true {
-		if pos > 0 {
-			pos--
-		}
-	}
-	tune()
-}
 
 func prior_station_repeat() {
 	display_info = display_info_default
