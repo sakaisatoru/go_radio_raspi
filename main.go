@@ -257,9 +257,6 @@ func infoupdate(line uint8, m string) {
 	oled.PrintWithPos(0, line, display_buff[:17])
 }
 
-
-
-
 func next_station_repeat() {
 	display_info = display_info_default
 	if pos < stlen-1 {
@@ -268,7 +265,6 @@ func next_station_repeat() {
 		infoupdate(0, mpv_infovalue)
 	}
 }
-
 
 func prior_station_repeat() {
 	display_info = display_info_default

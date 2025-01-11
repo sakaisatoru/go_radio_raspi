@@ -1,7 +1,7 @@
 package main
 
 import (
-"time"
+	"time"
 )
 
 func alarm_time_inc() {

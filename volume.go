@@ -1,11 +1,11 @@
 package main
 
 import (
-	"local.packages/mpvctl"
 	"fmt"
+	"local.packages/mpvctl"
 	"time"
-	)
-	
+)
+
 func show_volume() {
 	mu.Lock()
 	defer mu.Unlock()
@@ -34,4 +34,3 @@ func dec_volume() {
 	mpvctl.Setvol(volume)
 	show_volume()
 }
-

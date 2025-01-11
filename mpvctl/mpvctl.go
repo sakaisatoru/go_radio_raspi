@@ -120,23 +120,24 @@ func Recv(ch chan<- string, cb func(MpvIRC) (string, bool)) {
 	}
 }
 
-func Setvol(vol int8) {
+func Setvol(vol int8) error {
 	if vol < Volume_min {
 		vol = Volume_min
 	} else if vol > Volume_max {
 		vol = Volume_max
 	}
 	s := fmt.Sprintf("{\"command\": [\"set_property\",\"volume\",%d]}\x0a", volconv[vol])
-	Send(s)
+	return Send(s)
 }
 
-func Stop() {
+func Stop() error {
 	if Cb_connect_stop() == false {
-		Send("{\"command\": [\"stop\"]}\x0a")
+		return Send("{\"command\": [\"stop\"]}\x0a")
 	}
+	return nil
 }
 
-func Loadfile(s string) {
-	Send(fmt.Sprintf("{\"command\": [\"loadfile\",\"%s\"]}\x0a", s))
+func Loadfile(s string) error {
+	return Send(fmt.Sprintf("{\"command\": [\"loadfile\",\"%s\"]}\x0a", s))
 }
 
