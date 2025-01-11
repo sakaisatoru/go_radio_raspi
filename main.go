@@ -257,99 +257,6 @@ func infoupdate(line uint8, m string) {
 	oled.PrintWithPos(0, line, display_buff[:17])
 }
 
-func btninput(code chan<- ButtonCode) {
-	hold := 0
-	btn_h := btn_station_none
-
-	for {
-		time.Sleep(10 * time.Millisecond)
-		switch btn_h {
-		case 0:
-			for i, sn := range btnscan[:btn_station_select] {
-				// 押されているボタンがあれば、そのコードを保存する
-				if sn.Read() == rpio.Low {
-					btn_h = ButtonCode(i + 1)
-					hold = 0
-					break
-				}
-			}
-
-		// もし過去になにか押されていたら、現在それがどうなっているか調べる
-		default:
-			for i, sn := range btnscan[:btn_station_select] {
-				if btn_h == ButtonCode(i+1) {
-					if sn.Read() == rpio.Low {
-						// 引き続き押されている
-						hold++
-						if hold > btn_press_long_width {
-							if btn_h == btn_station_mode {
-								// mode と selectの同時押しの特殊処理
-								if btnscan[btn_station_select-1].Read() == rpio.Low {
-									btn_h = btn_system_shutdown
-								}
-							}
-							// リピート入力
-							// 表示が追いつかないのでリピート幅を調整すること
-							hold--
-							time.Sleep(150 * time.Millisecond)
-							code <- (btn_h | btn_station_repeat)
-						}
-					} else {
-						if hold >= btn_press_long_width {
-							// リピート入力の終わり
-							code <- (btn_h | btn_station_release)
-						} else if hold > btn_press_width {
-							// ワンショット入力
-							code <- (btn_h | btn_station_press)
-						} else if hold > 0 {
-							code <- btn_h
-						}
-						btn_h = 0
-						hold = 0
-					}
-					break
-				}
-			}
-		}
-	}
-}
-
-func tune() {
-	var (
-		station_url  string
-		err            error = nil
-	)
-	radio_enable = false
-	display_info = display_info_default
-	mpv_infovalue = stlist[pos].Name
-	infoupdate(0, mpv_infovalue)
-
-	args := strings.Split(stlist[pos].Url, "/")
-	if args[0] == "plugin:" {
-		switch args[1] {
-		case "afn.py":
-			station_url, err = netradio.AFN_get_url_with_api(args[2])
-		case "radiko.py":
-			station_url, err = netradio.Radiko_get_url(args[2])
-		default:
-			break
-		}
-		if err != nil {
-			mpv_infovalue = errmessage[ERROR_TUNING]
-			infoupdate(0, mpv_infovalue)
-			log.Println("tune() ", err)
-			return
-		}
-	} else {
-		station_url = stlist[pos].Url
-	}
-	mpvctl.Setvol(volume)
-
-	mpvctl.Loadfile(station_url)
-	rpio.Pin(23).High() // AF amp enable
-	radio_enable = true
-}
-
 func alarm_time_inc() {
 	if state_cdx == state_alarm_hour_set {
 		alarm_time = alarm_time.Add(1 * time.Hour)
@@ -364,58 +271,6 @@ func alarm_time_dec() {
 		// 時間が進んでしまうのでhourも補正する
 	}
 	alarm_time = alarm_time.Add(23 * time.Hour)
-}
-
-func showclock() {
-	mu.Lock()
-	defer mu.Unlock()
-	var s, s0 string
-	var md byte
-	// alarm
-	if clock_mode&1 == 1 {
-		if (state_cdx == state_alarm_hour_set || state_cdx == state_alarm_min_set) && colon == 1 {
-			if state_cdx == state_alarm_hour_set {
-				s0 = fmt.Sprintf("A  :%02d", alarm_time.Minute()) // blink hour
-			} else {
-				s0 = fmt.Sprintf("A%2d:  ", alarm_time.Hour()) // blink min
-			}
-		} else {
-			s0 = fmt.Sprintf("A%2d:%02d", alarm_time.Hour(),
-				alarm_time.Minute())
-		}
-	} else {
-		s0 = "      "
-	}
-	if md = 0x20; state_cdx == state_aux {
-		md += 0x35 // 0x20+0x22 == U
-	}
-	if time.Since(display_volume_time) >= display_volume_time_span {
-		display_volume = false
-	}
-
-	n := time.Now()
-	if display_volume {
-		s = fmt.Sprintf("vol:%2d   %c %2d%c%02d", volume,
-			md, n.Hour(), display_colon[colon], n.Minute())
-	} else {
-		s = fmt.Sprintf("%s %c %c %2d%c%02d", s0,
-			display_sleep[clock_mode&2],
-			md, n.Hour(), display_colon[colon], n.Minute())
-	}
-	oled.PrintWithPos(0, 1, []byte(s))
-
-	// １行目の表示、文字列があふれる場合はスクロールする
-	// display_buff = mes + "  " + mes であることを前提としている
-	display_buff_len := len(display_buff)
-	if display_buff_len <= 16 {
-		oled.PrintWithPos(0, 0, display_buff)
-	} else {
-		oled.PrintWithPos(0, 0, display_buff[display_buff_pos:display_buff_pos+17])
-		display_buff_pos++
-		if display_buff_pos >= int16((display_buff_len/2)+1) {
-			display_buff_pos = 0
-		}
-	}
 }
 
 func show_volume() {
@@ -445,14 +300,6 @@ func dec_volume() {
 	}
 	mpvctl.Setvol(volume)
 	show_volume()
-}
-
-func toggle_radio() {
-	if radio_enable {
-		mpvctl.Stop()
-	} else {
-		tune()
-	}
 }
 
 func next_tune() {
@@ -710,7 +557,7 @@ func main() {
 		case value := <-irch:
 			// 赤外線リモコンの処理
 			irrepeat_on = false
-			_,ok := irfunc[value]
+			_, ok := irfunc[value]
 			if ok {
 				irfunc[value]()
 			}
