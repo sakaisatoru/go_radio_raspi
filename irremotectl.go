@@ -39,6 +39,9 @@ var (
 				} else {
 					infoupdate(0, errmessage[SPACE16])
 				}
+			case display_info_only_doubleheight_clock:
+				// 高さ倍
+				oled.Clear()
 			case display_info_date:
 				// 日付
 				// 実際の表示は時刻表示の際に更新する

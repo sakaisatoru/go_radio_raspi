@@ -17,6 +17,9 @@ type AQM1602Y struct {
 	bus		i2c.I2C
 	Config	Config
 	mu		sync.Mutex
+	display_buff     []byte
+	display_buff_pos int
+	display_buff_len int
 }
 
 var (
@@ -150,6 +153,7 @@ func (d *AQM1602Y) UTF8toOLED(s *[]byte) int {
 func New(bus *i2c.I2C) AQM1602Y {
 	return AQM1602Y {
 		bus:		*bus,
+		display_buff_pos: 0,
 	}
 }
 
@@ -171,6 +175,16 @@ func (d *AQM1602Y) ConfigureWithSettings(config Config) {
 func (d *AQM1602Y) Init() {
 }
 
+func (d *AQM1602Y) SetDoubleHeight() {
+	d.bus.Write([]byte{0x00, 0x2c})
+	time.Sleep(20 * time.Millisecond)
+}
+
+func (d *AQM1602Y) SetNormal() {
+	d.bus.Write([]byte{0x00, 0x28})
+	time.Sleep(20 * time.Millisecond)
+}
+
 func (d *AQM1602Y) Clear() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -190,6 +204,53 @@ func (d *AQM1602Y) DisplayOn() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.bus.Write([]byte{0x00, 0x0c}) // display on
+}
+
+func (d *AQM1602Y) SetBuffer(m string) {
+	t := []byte(m)
+	l := d.UTF8toOLED(&t)
+	
+	d.display_buff = t[:l]
+	d.display_buff_pos = 0
+	d.display_buff_len = l
+
+	if d.display_buff_len > 16 {
+		d.display_buff = append(d.display_buff, []byte{0x20}...)
+		d.display_buff_len = len(d.display_buff)
+	}		
+}
+
+/*
+ * バッファの内容を表示する。桁溢れする場合はスクロール表示する。
+ */
+func (d *AQM1602Y) PrintBuffer(y uint8) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	
+	if d.display_buff_len < 1 {
+		return
+	}
+	y &= 0x01
+	d.bus.Write([]byte{0x00, 0x80 + y*0x20}) // set DDRAM address
+	time.Sleep(10 * time.Millisecond)
+	pos := d.display_buff_pos
+	var i int
+	for i = 0;i <= 15 && i < d.display_buff_len; i++ {
+		d.bus.Write([]byte{0x40, d.display_buff[pos]})
+		pos++
+		if pos >= d.display_buff_len {
+			pos = 0
+		}
+	}
+	for ; i <= 15; i++ {
+		d.bus.Write([]byte{0x40, 0x20})
+	}
+	if d.display_buff_len > 16 {
+		d.display_buff_pos++
+		if d.display_buff_pos >= d.display_buff_len {
+			d.display_buff_pos = 0
+		}
+	}
 }
 
 func (d *AQM1602Y) PrintWithPos(x uint8, y uint8, s []byte) {

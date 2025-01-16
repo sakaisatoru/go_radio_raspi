@@ -26,7 +26,7 @@ const (
 	MPV_SOCKET_PATH     string = "/run/user/1001/mpvsocket"
 	WEATHER_WORKING_DIR string = "/run/user/1001/weatherinfo"
 	FORECASTLOCATION    string = "埼玉県和光市"
-	VERSIONMESSAGE      string = "Radio Ver 1.52"
+	VERSIONMESSAGE      string = "Radio Ver 1.53"
 	//~ VERSIONMESSAGE string = "Radio Ver test"
 )
 
@@ -108,6 +108,7 @@ const (
 
 const (
 	display_info_default = iota
+	display_info_only_doubleheight_clock
 	display_info_date
 	display_info_weather_1
 	display_info_weather_2
@@ -142,13 +143,10 @@ var (
 	volume           int8  = mpvctl.Volume_max / 3
 	display_colon          = []uint8{' ', ':'}
 	display_sleep          = []uint8{' ', ' ', 'S'}
-	display_buff     []byte
-	display_buff_pos int16 = 0
 
 	display_volume           bool = false
 	display_volume_time      time.Time
 	display_volume_time_span time.Duration = 700 * 1000 * 1000
-	weekday                                = []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
 	clock_mode               uint8         = clock_mode_normal
 	alarm_time               time.Time     = time.Date(2024, time.July, 4, 4, 50, 0, 0, time.UTC)
 	tuneoff_time             time.Time     = time.Unix(0, 0).UTC()
@@ -245,16 +243,8 @@ func infoupdate(line uint8, m string) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	t := []byte(m)
-	l := oled.UTF8toOLED(&t)
-	display_buff_pos = 0
-	if l >= 17 {
-		display_buff = append(t[:l], append([]byte("  "), t[:l]...)...)
-	} else {
-		s := append(t[:l], []byte("                ")...)
-		display_buff = s[:16]
-	}
-	oled.PrintWithPos(0, line, display_buff[:17])
+	oled.SetBuffer(m)
+	oled.PrintBuffer(0)
 }
 
 func next_station_repeat() {
@@ -519,7 +509,7 @@ func main() {
 			if display_info == display_info_date {
 				n := time.Now()
 				infoupdate(0, fmt.Sprintf("%04d-%02d-%02d (%s)",
-					n.Year(), n.Month(), n.Day(), weekday[n.Weekday()]))
+					n.Year(), n.Month(), n.Day(), n.Weekday().String()[:3]))
 			}
 			colon ^= 1
 			showclock()

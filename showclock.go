@@ -10,6 +10,16 @@ func showclock() {
 	defer mu.Unlock()
 	var s, s0 string
 	var md byte
+	
+	if display_info == display_info_only_doubleheight_clock {
+		oled.SetDoubleHeight()
+		n := time.Now()
+		s = fmt.Sprintf("      %2d%c%02d", n.Hour(),display_colon[colon],n.Minute())
+		oled.PrintWithPos(0, 0, []byte(s))
+		return
+	} else {
+		oled.SetNormal()
+	}
 	// alarm
 	if clock_mode&1 == 1 {
 		if (state_cdx == state_alarm_hour_set || state_cdx == state_alarm_min_set) && colon == 1 {
@@ -43,16 +53,5 @@ func showclock() {
 	}
 	oled.PrintWithPos(0, 1, []byte(s))
 
-	// １行目の表示、文字列があふれる場合はスクロールする
-	// display_buff = mes + "  " + mes であることを前提としている
-	display_buff_len := len(display_buff)
-	if display_buff_len <= 16 {
-		oled.PrintWithPos(0, 0, display_buff)
-	} else {
-		oled.PrintWithPos(0, 0, display_buff[display_buff_pos:display_buff_pos+17])
-		display_buff_pos++
-		if display_buff_pos >= int16((display_buff_len/2)+1) {
-			display_buff_pos = 0
-		}
-	}
+	oled.PrintBuffer(0)
 }
