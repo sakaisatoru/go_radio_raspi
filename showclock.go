@@ -12,10 +12,12 @@ func showclock() {
 	var md byte
 	
 	if display_info == display_info_only_doubleheight_clock {
-		oled.SetDoubleHeight()
 		n := time.Now()
-		s = fmt.Sprintf("      %2d%c%02d", n.Hour(),display_colon[colon],n.Minute())
-		oled.PrintWithPos(0, 0, []byte(s))
+		s = fmt.Sprintf("%2d%c%02d", n.Hour(),display_colon[colon],n.Minute())
+		oled.SetDoubleHeight()
+		//~ oled.PrintWithPos(6, 0, []byte(s))
+		//~ oled.PrintUserNumericWithPos(6, []byte(s))
+		oled.ShowClockWithUserfont(3, []byte(s))
 		return
 	} else {
 		oled.SetNormal()

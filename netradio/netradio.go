@@ -40,9 +40,9 @@ func PrepareStationList(st string) ([]*StationInfo, error) {
 	s := ""
 	name := ""
 	extflag := false
-	
+
 	for scanner.Scan() {
-		s = strings.TrimLeft(scanner.Text()," ")
+		s = strings.TrimLeft(scanner.Text(), " ")
 		if strings.Contains(s, "#EXTM3U") {
 			extflag = true
 			continue
@@ -56,7 +56,7 @@ func PrepareStationList(st string) ([]*StationInfo, error) {
 		if len(s) != 0 {
 			if s[:1] == "#" {
 				continue
-			} 
+			}
 			stmp := new(StationInfo)
 			stmp.Url = s
 			if f {
@@ -98,7 +98,17 @@ func gen_temp_chunk_m3u8_url(url string, auth_token string) (string, error) {
 	return chunkurl, err
 }
 
+var (
+	afn_url_cache = map[string]string{"": ""}
+)
+
 func AFN_get_url_with_api(station string) (string, error) {
+	n, ok := afn_url_cache[station]
+	if ok {
+		//~ fmt.Println("AFN_get_url_with_api", station, n)
+		return n, nil
+	}
+
 	url := fmt.Sprintf("https://playerservices.streamtheworld.com/api/livestream?station=%s&transports=http,hls&version=1.8", station)
 	var s string
 	err := requests.
@@ -118,6 +128,7 @@ func AFN_get_url_with_api(station string) (string, error) {
 		//~ fmt.Println("afn api ",err)
 		u = ""
 	}
+	afn_url_cache[station] = u
 	return u, err
 }
 
