@@ -248,7 +248,11 @@ func (d *AQM1602Y) ShowClockWithUserfont(x uint8, s []byte) {
 			ex = append(ex, numericfont[j].left...)
 			ex = append(ex, numericfont[j].right...)
 		} else {
-			colon = s[i]
+			if i == 2 {
+				colon = s[i]
+			} else {
+				ex = append(ex, []byte{0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0}...)
+			}
 		}
 	}
 
