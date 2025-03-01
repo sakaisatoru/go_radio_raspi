@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/sakaisatoru/weatherinfo"
+	//~ "local.packages/weatherinfo"
 	"log"
 	"strings"
 )
@@ -39,18 +40,14 @@ func info_forecast() string {
 		case display_info_weather_1:
 			if err := weather_i.GetWeatherInfo((*forecast_area_ul)[foreloc], foreloc); err == nil {
 				// 警報・注意報
-				if len(weather_i.Warning) < 1 {
-					rs = "ｹｲﾎｳﾁｭｳｲﾎｳ ﾅｼ"
-				} else {
-					for i := 0; i < len(weather_i.Warning); i++ {
-						al := strings.Split(weather_i.Warning[i].AlarmType, "、")
-						for j := 0; j < len(al); j++ {
-							al[j] = weatherinfo.KanaName[al[j]]
-						}
-						stmp := strings.TrimRight(strings.Join(al, ","), ",")
-						rs = fmt.Sprintf("%s %s\n",
-							weatherinfo.KanaName[weather_i.Warning[i].Label], stmp)
+				for i := 0; i < len(weather_i.Warning); i++ {
+					al := strings.Split(weather_i.Warning[i].AlarmType, "、")
+					for j := 0; j < len(al); j++ {
+						al[j] = weatherinfo.KanaName[al[j]]
 					}
+					stmp := strings.TrimRight(strings.Join(al, ","), ",")
+					rs = fmt.Sprintf("%s %s\n",
+						weatherinfo.KanaName[weather_i.Warning[i].Label], stmp)
 				}
 			} else {
 				// 天気予報取得失敗

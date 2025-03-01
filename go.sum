@@ -6,8 +6,8 @@ github.com/carlmjohnson/requests v0.23.5 h1:NPANcAofwwSuC6SIMwlgmHry2V3pLrSqRiSB
 github.com/carlmjohnson/requests v0.23.5/go.mod h1:zG9P28thdRnN61aD7iECFhH5iGGKX2jIjKQD9kqYH+o=
 github.com/davecheney/i2c v0.0.0-20140823063045-caf08501bef2 h1:dJlrNN+WwRQae3jpM5U4K/YEug8H70UJ81qFTIW8OWw=
 github.com/davecheney/i2c v0.0.0-20140823063045-caf08501bef2/go.mod h1:dLsKZHRI/M1y9t45kzobSt8ozHf+wsCe+ahxsg51Vy0=
-github.com/sakaisatoru/weatherinfo v0.0.0-20241227133114-3635452d20e4 h1:LatF5kKCUfpeTt8uPi1OgUk4ct1fCost6Qb9HtU3hTo=
-github.com/sakaisatoru/weatherinfo v0.0.0-20241227133114-3635452d20e4/go.mod h1:oGm3qlNPrMSNjXQXpneJbS6+fg1iHzwFvs5Eqlw19fg=
+github.com/sakaisatoru/weatherinfo v0.0.0-20250202043653-5014578476f8 h1:oQ+oVzl1R+KrUj2Ss5yLnd9Gq55uN4HNjXcHZUtMLMQ=
+github.com/sakaisatoru/weatherinfo v0.0.0-20250202043653-5014578476f8/go.mod h1:oGm3qlNPrMSNjXQXpneJbS6+fg1iHzwFvs5Eqlw19fg=
 github.com/stianeikeland/go-rpio/v4 v4.6.0 h1:eAJgtw3jTtvn/CqwbC82ntcS+dtzUTgo5qlZKe677EY=
 github.com/stianeikeland/go-rpio/v4 v4.6.0/go.mod h1:A3GvHxC1Om5zaId+HqB3HKqx4K/AqeckxB7qRjxMK7o=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=

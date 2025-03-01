@@ -49,6 +49,11 @@ var (
 			default:
 				// 天気予報
 				infoupdate(0, info_forecast())
+				if forecastinfo_enable == false {
+					// 天気予報の取得に失敗している場合はそれ以上表示しないで再取得を試みる
+					display_info = display_info_default
+					go setup_forecast(FORECASTLOCATION)
+				}
 			}
 		},
 		irremote.Ir_C: func() {

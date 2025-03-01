@@ -1,22 +1,20 @@
 module radio.raspi/radio_r
 
-go 1.23
-
-toolchain go1.23.4
+go 1.23.5
 
 replace local.packages/aqm1602y => ./aqm1602y
 
-replace local.packages/netradio => ./netradio
+replace local.packages/irremote => ./irremote
 
 replace local.packages/mpvctl => ./mpvctl
 
-replace local.packages/rotaryencoder => ./rotaryencoder
+replace local.packages/netradio => ./netradio
 
-replace local.packages/irremote => ./irremote
+replace local.packages/rotaryencoder => ./rotaryencoder
 
 require (
 	github.com/davecheney/i2c v0.0.0-20140823063045-caf08501bef2
-	github.com/sakaisatoru/weatherinfo v0.0.0-20241227133114-3635452d20e4
+	github.com/sakaisatoru/weatherinfo v0.0.0-20250202043653-5014578476f8
 	github.com/stianeikeland/go-rpio/v4 v4.6.0
 	local.packages/aqm1602y v0.0.0-00010101000000-000000000000
 	local.packages/irremote v0.0.0-00010101000000-000000000000

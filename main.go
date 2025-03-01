@@ -3,13 +3,14 @@ package main
 import (
 	"fmt"
 	"github.com/davecheney/i2c"
-	"github.com/sakaisatoru/weatherinfo"
 	"github.com/stianeikeland/go-rpio/v4"
 	"local.packages/aqm1602y"
 	"local.packages/irremote"
 	"local.packages/mpvctl"
 	"local.packages/netradio"
 	"local.packages/rotaryencoder"
+	"github.com/sakaisatoru/weatherinfo"
+	//~ "local.packages/weatherinfo"
 	"log"
 	"net"
 	"os"
@@ -133,16 +134,16 @@ const (
 )
 
 var (
-	oled             aqm1602y.AQM1602Y
-	mu               sync.Mutex
-	stlist           []*netradio.StationInfo
-	stlen            int
-	colon            uint8 = 0
-	pos              int   = 0
-	radio_enable     bool  = false
-	volume           int8  = mpvctl.Volume_max / 3
-	display_colon          = []uint8{' ', ':'}
-	display_sleep          = []uint8{' ', ' ', 'S'}
+	oled          aqm1602y.AQM1602Y
+	mu            sync.Mutex
+	stlist        []*netradio.StationInfo
+	stlen         int
+	colon         uint8 = 0
+	pos           int   = 0
+	radio_enable  bool  = false
+	volume        int8  = mpvctl.Volume_max / 3
+	display_colon       = []uint8{' ', ':'}
+	display_sleep       = []uint8{' ', ' ', 'S'}
 
 	display_volume           bool = false
 	display_volume_time      time.Time
