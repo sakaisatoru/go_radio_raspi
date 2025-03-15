@@ -28,7 +28,6 @@ const (
 	WEATHER_WORKING_DIR string = "/run/user/1001/weatherinfo"
 	FORECASTLOCATION    string = "埼玉県和光市"
 	VERSIONMESSAGE      string = "Radio Ver 1.55"
-	//~ VERSIONMESSAGE string = "Radio Ver test"
 )
 
 const (
@@ -435,10 +434,10 @@ func main() {
 	}
 
 	// bt speaker modeからradioへの遷移
+	// （なお現在、BTモードへの遷移機能を省略中。
 	state_event[state_AUX].btn_select_click.cb = func() bool {
 		// ここにペアリング先の再生を止める処理を置く
 		rpio.Pin(23).Low() // AF amp disable
-		//~ infoupdate(0, errmessage[SPACE16])
 		state_cdx = state_NORMAL_MODE
 		return false
 	}
