@@ -18,6 +18,9 @@ func show_volume() {
 }
 
 func inc_volume() {
+	if radio_enable == false {
+		tune()
+	}
 	volume++
 	if volume > mpvctl.Volume_max {
 		volume = mpvctl.Volume_max
@@ -28,8 +31,9 @@ func inc_volume() {
 
 func dec_volume() {
 	volume--
-	if volume < mpvctl.Volume_min {
+	if volume <= mpvctl.Volume_min {
 		volume = mpvctl.Volume_min
+		mpvctl.Stop()
 	}
 	mpvctl.Setvol(volume)
 	show_volume()

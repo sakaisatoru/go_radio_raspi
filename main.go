@@ -419,7 +419,7 @@ func main() {
 		rpio.Pin(23).Low()
 		time.Sleep(700 * time.Millisecond)
 		cmd := exec.Command("sudo", "systemctl", "restart", "go_radio")
-		err := cmd.Run()
+		cmd.Run()
 		return false
 	}
 
