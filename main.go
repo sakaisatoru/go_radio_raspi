@@ -27,15 +27,15 @@ const (
 	MPV_SOCKET_PATH     string = "/run/user/1001/mpvsocket"
 	WEATHER_WORKING_DIR string = "/run/user/1001/weatherinfo"
 	FORECASTLOCATION    string = "埼玉県和光市"
-	VERSIONMESSAGE      string = "Radio Ver 1.54"
+	VERSIONMESSAGE      string = "Radio Ver 1.55"
 	//~ VERSIONMESSAGE string = "Radio Ver test"
 )
 
 const (
-	state_normal_mode    int = iota // radio on/off
-	state_aux                       // bt spealer
-	state_alarm_hour_set            // 時刻調整中
-	state_alarm_min_set             //
+	state_NORMAL_MODE    int = iota // radio on/off
+	state_AUX                       // bt spealer
+	state_ALARM_HOUR_SET            // 時刻調整中
+	state_ALARM_MIN_SET             //
 	statelength
 )
 
@@ -166,7 +166,7 @@ var (
 		"dir not ready.  ",
 		"file not open.  "}
 	btnscan         = []rpio.Pin{26, 5, 6, 22, 17, 27}
-	state_cdx   int = state_normal_mode
+	state_cdx   int = state_NORMAL_MODE
 	state_event     = [statelength]stateEventhandlers{
 		// normal mode (radio)
 		{eventhandler{cb: _true, dflt: inc_volume},
@@ -175,8 +175,8 @@ var (
 			eventhandler{cb: _false, dflt: _blank},
 
 			eventhandler{cb: _false, dflt: _blank},
-			eventhandler{cb: func() bool { state_cdx = state_alarm_hour_set; return false }, dflt: _blank},
-			eventhandler{cb: func() bool { state_cdx = state_alarm_hour_set; return false }, dflt: _blank},
+			eventhandler{cb: func() bool { state_cdx = state_ALARM_HOUR_SET; return false }, dflt: _blank},
+			eventhandler{cb: func() bool { state_cdx = state_ALARM_HOUR_SET; return false }, dflt: _blank},
 
 			eventhandler{cb: _true, dflt: next_tune},
 			eventhandler{cb: _true, dflt: next_station_repeat},
@@ -208,8 +208,8 @@ var (
 			eventhandler{cb: _true, dflt: toggle_radio},
 			eventhandler{cb: _false, dflt: _blank},
 
-			eventhandler{cb: _true, dflt: func() { state_cdx = state_alarm_min_set }}, // アラーム分の設定へ遷移
-			eventhandler{cb: _true, dflt: func() { state_cdx = state_alarm_min_set }},
+			eventhandler{cb: _true, dflt: func() { state_cdx = state_ALARM_MIN_SET }}, // アラーム分の設定へ遷移
+			eventhandler{cb: _true, dflt: func() { state_cdx = state_ALARM_MIN_SET }},
 			eventhandler{cb: _false, dflt: _blank},
 
 			eventhandler{cb: func() bool { alarm_time_inc(); return false }, dflt: _blank},
@@ -225,8 +225,8 @@ var (
 			eventhandler{cb: _true, dflt: toggle_radio},
 			eventhandler{cb: _false, dflt: _blank},
 
-			eventhandler{cb: _true, dflt: func() { state_cdx = state_normal_mode }},
-			eventhandler{cb: _true, dflt: func() { state_cdx = state_normal_mode }},
+			eventhandler{cb: _true, dflt: func() { state_cdx = state_NORMAL_MODE }},
+			eventhandler{cb: _true, dflt: func() { state_cdx = state_NORMAL_MODE }},
 			eventhandler{cb: _false, dflt: _blank},
 
 			eventhandler{cb: func() bool { alarm_time_inc(); return false }, dflt: _blank},
@@ -409,18 +409,22 @@ func main() {
 		go server(ln, recvmessage)
 	}
 
-	// radioからaux(BT Speaker mode)への遷移
-	state_event[state_normal_mode].btn_select_press.cb = func() bool {
+	// Reboot
+	state_event[state_NORMAL_MODE].btn_select_press.cb = func() bool {
 		if radio_enable {
 			mpvctl.Stop()
 		}
-		rpio.Pin(23).High() // AF amp enable
-		state_cdx = state_aux
+		stmp := "reboot now      "
+		infoupdate(0, stmp)
+		rpio.Pin(23).Low()
+		time.Sleep(700 * time.Millisecond)
+		cmd := exec.Command("sudo", "systemctl", "restart", "go_radio")
+		err := cmd.Run()
 		return false
 	}
 
 	// alarm, sleep 切り替え
-	state_event[state_normal_mode].btn_mode_click.cb = func() bool {
+	state_event[state_NORMAL_MODE].btn_mode_click.cb = func() bool {
 		clock_mode++
 		clock_mode &= 3
 		if (clock_mode & clock_mode_sleep) != 0 {
@@ -431,11 +435,11 @@ func main() {
 	}
 
 	// bt speaker modeからradioへの遷移
-	state_event[state_aux].btn_select_click.cb = func() bool {
+	state_event[state_AUX].btn_select_click.cb = func() bool {
 		// ここにペアリング先の再生を止める処理を置く
 		rpio.Pin(23).Low() // AF amp disable
 		//~ infoupdate(0, errmessage[SPACE16])
-		state_cdx = state_normal_mode
+		state_cdx = state_NORMAL_MODE
 		return false
 	}
 
@@ -444,7 +448,7 @@ func main() {
 		default:
 			time.Sleep(10 * time.Millisecond)
 
-			if (state_cdx != state_alarm_hour_set) && (state_cdx != state_alarm_min_set) {
+			if (state_cdx != state_ALARM_HOUR_SET) && (state_cdx != state_ALARM_MIN_SET) {
 				if (clock_mode & clock_mode_alarm) != 0 {
 					// アラーム
 					n := time.Now()
@@ -476,7 +480,7 @@ func main() {
 
 		case value := <-recvmessage:
 			radio_enable = false
-			state_cdx = state_aux
+			state_cdx = state_AUX
 			mpvctl.Stop()
 			mpvctl.Loadfile(strings.TrimRight(value, "\x0a"))
 			mpv_infovalue = fmt.Sprintf("AUX:%s", value)

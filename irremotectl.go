@@ -57,10 +57,10 @@ var (
 			}
 		},
 		irremote.Ir_C: func() {
-			if state_cdx == state_aux {
-				state_event[state_aux].btn_select_click.do_handler()
+			if state_cdx == state_AUX {
+				state_event[state_AUX].btn_select_click.do_handler()
 			} else {
-				state_event[state_normal_mode].btn_select_press.do_handler()
+				state_event[state_NORMAL_MODE].btn_select_press.do_handler()
 			}
 		},
 		irremote.Ir_Center: func() {

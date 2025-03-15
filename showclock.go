@@ -24,8 +24,8 @@ func showclock() {
 	}
 	// alarm
 	if clock_mode&1 == 1 {
-		if (state_cdx == state_alarm_hour_set || state_cdx == state_alarm_min_set) && colon == 1 {
-			if state_cdx == state_alarm_hour_set {
+		if (state_cdx == state_ALARM_HOUR_SET || state_cdx == state_ALARM_MIN_SET) && colon == 1 {
+			if state_cdx == state_ALARM_HOUR_SET {
 				s0 = fmt.Sprintf("A  :%02d", alarm_time.Minute()) // blink hour
 			} else {
 				s0 = fmt.Sprintf("A%2d:  ", alarm_time.Hour()) // blink min
@@ -37,7 +37,7 @@ func showclock() {
 	} else {
 		s0 = "      "
 	}
-	if md = 0x20; state_cdx == state_aux {
+	if md = 0x20; state_cdx == state_AUX {
 		md += 0x35 // 0x20+0x22 == U
 	}
 	if time.Since(display_volume_time) >= display_volume_time_span {
