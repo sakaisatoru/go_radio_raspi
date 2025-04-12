@@ -2,29 +2,11 @@ package main
 
 import (
 	"local.packages/irremote"
-	"time"
 )
 
-//~ 	Ir_Power    = 0x10d8
-//~ 	Ir_A        = 0x10f8
-//~ Ir_B        = 0x1078
-//~ 	Ir_C        = 0x1058
-//~ 	Ir_N        = 0x10A0
-//~ Ir_NE       = 0x1021
-//~ Ir_E        = 0x1080
-//~ Ir_SE       = 0x1081
-//~ 	Ir_S        = 0x1000
-//~ 	Ir_SW       = 0x1011
-//~ Ir_W        = 0x1010
-//~ 	Ir_NW       = 0x10B1
-//~ 	Ir_Center   = 0x1020
-//~ Ir_Holdflag = 0x10000
-
 var (
-	irrepeat_time time.Time
-	irrepeat_on   bool = false
-	irfunc             = map[int32]func(){
-		irremote.Ir_A: func() {
+	irfunc = map[int32]func(){
+		irremote.KEY_A: func() {
 			// OLED１行目の表示切り替え
 			display_info++
 			if display_info >= display_info_end {
@@ -56,40 +38,35 @@ var (
 				}
 			}
 		},
-		irremote.Ir_C: func() {
-			if state_cdx == state_AUX {
-				state_event[state_AUX].btn_select_click.do_handler()
-			} else {
-				state_event[state_NORMAL_MODE].btn_select_press.do_handler()
-			}
-		},
-		irremote.Ir_Center: func() {
+		irremote.KEY_SELECT: func() {
 			state_event[state_cdx].btn_mode_click.do_handler()
 		},
-		irremote.Ir_Center | irremote.Ir_Holdflag: func() {
-			state_event[state_cdx].btn_mode_press.do_handler()
+		irremote.KEY_SELECT | irremote.Ir_Releaseflag: func() {
+			state_event[state_cdx].btn_mode_release.do_handler()
 		},
-		irremote.Ir_N: func() {
+		irremote.KEY_UP: func() {
 			state_event[state_cdx].btn_prior_click.do_handler()
 		},
-		irremote.Ir_N | irremote.Ir_Holdflag: func() {
-			irrepeat_on = true
-			irrepeat_time = time.Now()
+		irremote.KEY_UP | irremote.Ir_Holdflag: func() {
 			state_event[state_cdx].btn_prior_repeat.do_handler()
 		},
-		irremote.Ir_S: func() {
+		irremote.KEY_UP | irremote.Ir_Releaseflag: func() {
+			state_event[state_cdx].btn_prior_release.do_handler()
+		},
+		irremote.KEY_DOWN: func() {
 			state_event[state_cdx].btn_next_click.do_handler()
 		},
-		irremote.Ir_S | irremote.Ir_Holdflag: func() {
-			irrepeat_on = true
-			irrepeat_time = time.Now()
+		irremote.KEY_DOWN | irremote.Ir_Holdflag: func() {
 			state_event[state_cdx].btn_next_repeat.do_handler()
 		},
-		irremote.Ir_NW:                        inc_volume,
-		irremote.Ir_NW | irremote.Ir_Holdflag: inc_volume,
-		irremote.Ir_SW:                        dec_volume,
-		irremote.Ir_SW | irremote.Ir_Holdflag: dec_volume,
-		irremote.Ir_Power: func() {
+		irremote.KEY_DOWN | irremote.Ir_Releaseflag: func() {
+			state_event[state_cdx].btn_next_release.do_handler()
+		},
+		irremote.KEY_VOLUMEUP:                          inc_volume,
+		irremote.KEY_VOLUMEUP | irremote.Ir_Holdflag:   inc_volume,
+		irremote.KEY_VOLUMEDOWN:                        dec_volume,
+		irremote.KEY_VOLUMEDOWN | irremote.Ir_Holdflag: dec_volume,
+		irremote.KEY_STOP: func() {
 			state_event[state_cdx].btn_select_click.do_handler()
 		},
 	}

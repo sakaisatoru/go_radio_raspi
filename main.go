@@ -3,13 +3,13 @@ package main
 import (
 	"fmt"
 	"github.com/davecheney/i2c"
+	"github.com/sakaisatoru/weatherinfo"
 	"github.com/stianeikeland/go-rpio/v4"
 	"local.packages/aqm1602y"
 	"local.packages/irremote"
 	"local.packages/mpvctl"
 	"local.packages/netradio"
 	"local.packages/rotaryencoder"
-	"github.com/sakaisatoru/weatherinfo"
 	//~ "local.packages/weatherinfo"
 	"log"
 	"net"
@@ -27,7 +27,7 @@ const (
 	MPV_SOCKET_PATH     string = "/run/user/1001/mpvsocket"
 	WEATHER_WORKING_DIR string = "/run/user/1001/weatherinfo"
 	FORECASTLOCATION    string = "埼玉県和光市"
-	VERSIONMESSAGE      string = "Radio Ver 1.55"
+	VERSIONMESSAGE      string = "Radio Ver 1.56"
 )
 
 const (
@@ -173,9 +173,21 @@ var (
 			eventhandler{cb: _true, dflt: toggle_radio},
 			eventhandler{cb: _false, dflt: _blank},
 
+			eventhandler{cb: func() bool {
+				clock_mode++
+				clock_mode &= 3
+				if (clock_mode & clock_mode_sleep) != 0 {
+					// スリープ時刻の設定を行う
+					tuneoff_time = time.Now().Add(30 * time.Minute)
+				}
+				return false
+			}, dflt: _blank},
 			eventhandler{cb: _false, dflt: _blank},
-			eventhandler{cb: func() bool { state_cdx = state_ALARM_HOUR_SET; return false }, dflt: _blank},
-			eventhandler{cb: func() bool { state_cdx = state_ALARM_HOUR_SET; return false }, dflt: _blank},
+			eventhandler{cb: func() bool {
+				clock_mode |= 1
+				state_cdx = state_ALARM_HOUR_SET
+				return false
+			}, dflt: _blank},
 
 			eventhandler{cb: _true, dflt: next_tune},
 			eventhandler{cb: _true, dflt: next_station_repeat},
@@ -208,7 +220,7 @@ var (
 			eventhandler{cb: _false, dflt: _blank},
 
 			eventhandler{cb: _true, dflt: func() { state_cdx = state_ALARM_MIN_SET }}, // アラーム分の設定へ遷移
-			eventhandler{cb: _true, dflt: func() { state_cdx = state_ALARM_MIN_SET }},
+			eventhandler{cb: _false, dflt: _blank},
 			eventhandler{cb: _false, dflt: _blank},
 
 			eventhandler{cb: func() bool { alarm_time_inc(); return false }, dflt: _blank},
@@ -225,7 +237,7 @@ var (
 			eventhandler{cb: _false, dflt: _blank},
 
 			eventhandler{cb: _true, dflt: func() { state_cdx = state_NORMAL_MODE }},
-			eventhandler{cb: _true, dflt: func() { state_cdx = state_NORMAL_MODE }},
+			eventhandler{cb: _false, dflt: _blank},
 			eventhandler{cb: _false, dflt: _blank},
 
 			eventhandler{cb: func() bool { alarm_time_inc(); return false }, dflt: _blank},
@@ -422,17 +434,6 @@ func main() {
 		return false
 	}
 
-	// alarm, sleep 切り替え
-	state_event[state_NORMAL_MODE].btn_mode_click.cb = func() bool {
-		clock_mode++
-		clock_mode &= 3
-		if (clock_mode & clock_mode_sleep) != 0 {
-			// スリープ時刻の設定を行う
-			tuneoff_time = time.Now().Add(30 * time.Minute)
-		}
-		return false
-	}
-
 	// bt speaker modeからradioへの遷移
 	// （なお現在、BTモードへの遷移機能を省略中。
 	state_event[state_AUX].btn_select_click.cb = func() bool {
@@ -468,15 +469,6 @@ func main() {
 				}
 			}
 
-			// リモコンがエッジを検出しないので、最後の選局ボタンリピート押下から
-			// 一定時間(リモコンのリピート押下判定時間以上)が経過したら選局する事とする
-			if irrepeat_on {
-				if time.Since(irrepeat_time) >= irremote.T_span*2 {
-					irrepeat_on = false
-					tune()
-				}
-			}
-
 		case value := <-recvmessage:
 			radio_enable = false
 			state_cdx = state_AUX
@@ -490,7 +482,6 @@ func main() {
 
 		case value := <-irch:
 			// 赤外線リモコンの処理
-			irrepeat_on = false
 			_, ok := irfunc[value]
 			if ok {
 				irfunc[value]()
