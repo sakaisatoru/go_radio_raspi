@@ -10,7 +10,6 @@ import (
 	"local.packages/mpvctl"
 	"local.packages/netradio"
 	"local.packages/rotaryencoder"
-	//~ "local.packages/weatherinfo"
 	"log"
 	"net"
 	"os"
@@ -320,9 +319,6 @@ func main() {
 	oled = aqm1602y.New(i2c)
 	oled.Configure()
 	oled.PrintWithPos(0, 0, []byte(VERSIONMESSAGE))
-	//								1	2		3	4	5	6		7	8	9	0
-	//~ oled.PrintWithPos(0, 0, []byte{0x00,0x01,0x02,0x03,0x04,0x04,0x02,0x06,0x06,0x06})
-	//~ oled.PrintWithPos(0, 1, []byte{0x00,0x05,0x01,0x00,0x01,0x07,0x00,0x07,0x01,0x03})
 	defer oled.DisplayOff()
 
 	// rotaryencoder
