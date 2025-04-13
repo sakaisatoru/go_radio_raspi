@@ -1,0 +1,19 @@
+[[protocols]]
+name = "13key white"
+protocol = "nec"
+variant = "nec"
+[protocols.scancodes]
+0x10d8 = "KEY_STOP"
+0x10f8 = "KEY_A"
+0x1078 = "KEY_B"
+0x1058 = "KEY_C"
+0x10a0 = "KEY_UP"
+0x1000 = "KEY_DOWN"
+0x1010 = "KEY_LEFT"
+0x1080 = "KEY_RIGHT"
+0x1020 = "KEY_SELECT"         
+0x10b1 = "KEY_VOLUMEUP"    # UP - LEFT
+0x1011 = "KEY_VOLUMEDOWN"  # DOWN - LEFT
+0x1021 = "KEY_PAGEUP"      # UP - RIGHT
+0x1081 = "KEY_PAGEDOWN"    # DOWN - RIGHT
+
