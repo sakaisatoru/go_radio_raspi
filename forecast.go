@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/sakaisatoru/weatherinfo"
-	//~ "local.packages/weatherinfo"
 	"log"
 	"strings"
 )
