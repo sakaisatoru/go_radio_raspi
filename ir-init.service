@@ -3,7 +3,7 @@ Description = irを初期化する
 After=local-fs.target network-online.target
 
 [Service]
-ExecStart=/usr/bin/ir-keytable -p nec
+ExecStart=/usr/bin/ir-keytable --write=/etc/ir_keymap.toml
 Type=exec
 Restart=oneshot
 

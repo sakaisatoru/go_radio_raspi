@@ -3,7 +3,6 @@ package irremote
 import (
 	"golang.org/x/sys/unix"
 	"syscall"
-	"time"
 	"unsafe"
 )
 
@@ -15,22 +14,26 @@ type Input_event struct {
 }
 
 const (
-	Ir_Power    = 0x10d8
-	Ir_A        = 0x10f8
-	Ir_B        = 0x1078
-	Ir_C        = 0x1058
-	Ir_N        = 0x10A0
-	Ir_NE       = 0x1021
-	Ir_E        = 0x1080
-	Ir_SE       = 0x1081
-	Ir_S        = 0x1000
-	Ir_SW       = 0x1011
-	Ir_W        = 0x1010
-	Ir_NW       = 0x10B1
-	Ir_Center   = 0x1020
-	Ir_Holdflag = 0x10000
+	Ir_Holdflag    = 0x10000
+	Ir_Releaseflag = 0x20000
 
-	T_span time.Duration = 110 * 1e6 // 110ms
+	KEY_STOP       = 128   // 0x10d8
+	KEY_A          = 30    // 0x10f8
+	KEY_B          = 48    // 0x1078
+	KEY_C          = 46    // 0x1058
+	KEY_UP         = 103   // 0x10a0
+	KEY_DOWN       = 108   // 0x1000
+	KEY_LEFT       = 105   // 0x1010
+	KEY_RIGHT      = 106   // 0x1080
+	KEY_SELECT     = 0x161 // 0x1020
+	KEY_VOLUMEUP   = 115   // 0x10b1      # UP - LEFT
+	KEY_VOLUMEDOWN = 114   // 0x1011    # DOWN - LEFT
+	KEY_PAGEUP     = 104   // 0x1021        # UP - RIGHT
+	KEY_PAGEDOWN   = 109   // 0x1081      # DOWN - RIGHT
+
+	key_press   = 1
+	key_repeat  = 2
+	key_release = 0
 )
 
 var (
@@ -49,16 +52,10 @@ func Close() {
 
 func Read(ch chan<- int32) {
 	var (
-		buf = make([]byte, 24)
-		ev  *Input_event
+		buf    = make([]byte, 24)
+		ev     *Input_event
+		repeat bool = false
 	)
-	hold_span := 8
-	hold_count := 0
-	old := Input_event{
-		Value: 0}
-	t_start := time.Now()
-	hold := false
-	release := false
 
 	for {
 		_, err := syscall.Read(fd, buf)
@@ -66,36 +63,19 @@ func Read(ch chan<- int32) {
 			break
 		}
 		ev = (*Input_event)(unsafe.Pointer(&buf[0]))
-		if ev.Type == unix.EV_MSC {
-			if ev.Value != old.Value || time.Since(t_start) > T_span {
-				release = true
-				hold = false
-				hold_count = 0
-			}
-
-			t_start = time.Now()
-			old = *ev
-
-			if hold {
-				ch <- (ev.Value | Ir_Holdflag)
-				continue
-			}
-
-			if release {
-				ch <- ev.Value
-				release = false
-				continue
-			}
-
-			if release == false {
-				hold_count++
-				if hold_count > hold_span {
-					hold = true
-					ch <- (ev.Value | Ir_Holdflag)
-					continue
+		if ev.Type == unix.EV_KEY {
+			switch ev.Value {
+			case key_press:
+				ch <- int32(ev.Code)
+			case key_repeat:
+				repeat = true
+				ch <- int32(ev.Code) | Ir_Holdflag
+			case key_release:
+				if repeat {
+					repeat = false
+					ch <- int32(ev.Code) | Ir_Releaseflag
 				}
 			}
 		}
 	}
-
 }
