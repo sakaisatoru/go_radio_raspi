@@ -38,18 +38,30 @@ const (
 var (
 	mpv        net.Conn
 	mpvprocess *exec.Cmd
-	volconv = []int8{ 	0, 8, 12,16, 22,28,35,42,
-						49,56,61,65, 69,72,75,78,
-						81,83,85,87, 89,91,94, 100}
-
-	Volume_min      int8 = 0
-	Volume_max      int8 = int8(len(volconv) - 1)
+	volconv	*[]int8
+	voldefault = []int8{ 0, 8,12,16, 22,28,34,41,
+						48,56,61,65, 69}
+						//~ 48,56,61,65, 69,72,75,78,
+						//~ 81,83,85,87, 89,91,94, 100}
+	Volume_min      int8
+	Volume_max      int8
 	readbuf              = make([]byte, IRCbuffsize)
 	Cb_connect_stop      = func() bool { return false }
 	socketpath      string
 )
 
+func SetVoltable(t *[]int8) {
+	if t == nil {
+		volconv = &voldefault
+	} else {
+		volconv = t
+	}
+	Volume_min = 0
+	Volume_max = int8(len(*volconv) - 1)
+}
+
 func Init(s string) error {
+	SetVoltable(nil)
 	socketpath = s
 	mpvprocess = exec.Command("/usr/bin/mpv", MPVOPTION1,
 		MPVOPTION2+socketpath,
@@ -122,7 +134,7 @@ func Setvol(vol int8) error {
 	} else if vol > Volume_max {
 		vol = Volume_max
 	}
-	s := fmt.Sprintf("{\"command\": [\"set_property\",\"volume\",%d]}\x0a", volconv[vol])
+	s := fmt.Sprintf("{\"command\": [\"set_property\",\"volume\",%d]}\x0a", (*volconv)[vol])
 	return Send(s)
 }
 
