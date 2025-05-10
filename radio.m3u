@@ -3,16 +3,30 @@
 #EXTINF:-1,Saitama / ｽﾏｲﾙﾗｼﾞｵ
 mms://hdv.nkansai.tv/smile
 
-#EXTINF:-1,USA / AFN TOKYO
+#EXTINF:-1,USA / AFN Tokyo
 plugin:/afn.py/AFNP_TKO
+#EXTINF:-1,USA / AFN Iwakuni
+plugin:/afn.py/AFNP_IWA
+#EXTINF:-1,USA / AFN Misawa
+plugin:/afn.py/AFNP_MSW
+#EXTINF:-1,USA / AFN Okinawa
+plugin:/afn.py/AFNP_OKN
+#EXTINF:-1,USA / AFN Sasebo
+plugin:/afn.py/AFNP_SBO
 #EXTINF:-1,USA / AFN Gravity
 plugin:/afn.py/AFN_GRV
-#EXTINF:-1,USA / AFN Joe Radio
-plugin:/afn.py/AFN_JOEP
-#EXTINF:-1,USA / AFN Hot AC
-plugin:/afn.py/AFN_HOTP
-#EXTINF:-1,USA / AFN Legacy
-plugin:/afn.py/AFN_LGYP
+#EXTINF:-1,USA / AFN Hall of Fame
+plugin:/afn.py/AFN01_S01
+#EXTINF:-1,USA / AFN On Stage
+plugin:/afn.py/AFN02_S01
+#EXTINF:-1,USA / AFN The Groove
+plugin:/afn.py/AFN03_S01
+#EXTINF:-1,USA / AFN Mach 5
+plugin:/afn.py/AFN04_S01
+#EXTINF:-1,USA / AFN Jazz+
+plugin:/afn.py/AFN05_S01
+#EXTINF:-1,USA / AFN Country
+plugin:/afn.py/AFN_CTY
 
 #EXTINF:-1,klassikradio.de / Klassik Radio Live
 http://live.streams.klassikradio.de/klassikradio-deutschland/stream/mp3
@@ -70,3 +84,6 @@ plugin:/radiko.py/JOAK
 plugin:/radiko.py/JOAK-FM
 #EXTINF:-1,NHK R2 / NHK R2
 https://radio-stream.nhk.jp/hls/live/2023501/nhkradiruakr2/master48k.m3u8
+
+#EXTINF:-1,Vocaloid Radio / Vocaloid
+http://curiosity.shoutca.st:8019/stream

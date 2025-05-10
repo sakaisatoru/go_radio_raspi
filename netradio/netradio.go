@@ -21,8 +21,8 @@ type StationInfo struct {
 
 const (
 	auth_key  string = "bcd151073c03b352e1ef2fd66c32209da9ca0afa" // 現状は固有 key_lenght = 0
-	tokenfile string = "/run/user/1000/radiko_token"
-	afnurlfile string = "/run/user/1000/afnurl"
+	//~ tokenfile string = "/run/user/1000/radiko_token"
+	//~ afnurlfile string = "/run/user/1000/afnurl"
 )
 
 type Ports struct {
@@ -175,10 +175,7 @@ func gen_temp_chunk_m3u8_url(url string, auth_token string) (string, error) {
 	return chunkurl, err
 }
 
-var (
-	afn_url_cache = map[string]string{"": ""}
-)
-
+var afn_url_cache = map[string]string{"": ""}
 func AFN_get_url_with_api(station string) (string, error) {
 	var s string
 	u := ""
@@ -194,17 +191,20 @@ func AFN_get_url_with_api(station string) (string, error) {
 		if e == nil {
 			for _, mountpoint := range lsc.Mps.Mp {
 				if mountpoint.MediaFormat.Audio.Codec == "mp3" {
-					t, _ := os.ReadFile(afnurlfile)
-					cacheurl := string(t)
 					newurl := mountpoint.Servers.Server[0].Ip
-					for _, v := range mountpoint.Servers.Server {
-						if v.Ip == cacheurl {
-							newurl = cacheurl
-							break
+					// 以前に接続したURLが含まれていればそれを返す
+					_,ok := afn_url_cache[station]
+					if ok {
+						for _, v := range mountpoint.Servers.Server {
+							if v.Ip == afn_url_cache[station] {
+								newurl = afn_url_cache[station]
+								break
+							}
 						}
+					} else {
+						afn_url_cache[station] = newurl
 					}
 					u = fmt.Sprintf("https://%s/%s.mp3", newurl, station)
-					os.WriteFile(afnurlfile, []byte(newurl), 0666)
 					break
 				}
 			}
@@ -213,19 +213,16 @@ func AFN_get_url_with_api(station string) (string, error) {
 	return u, err
 }
 
+var authtoken string = ""
 func Radiko_get_url(station string) (string, error) {
 	var (
-		authtoken string
 		chunkurl  string
 		err       error = nil
 	)
 
 	station_url := fmt.Sprintf("http://f-radiko.smartstream.ne.jp/%s/_definst_/simul-stream.stream/playlist.m3u8", station)
 
-	t, _ := os.ReadFile(tokenfile)
-	authtoken = string(t)
 	chunkurl, err = gen_temp_chunk_m3u8_url(station_url, authtoken)
-
 	if err != nil || len(chunkurl) == 0 {
 		url := "https://radiko.jp/v2/api/auth1"
 
@@ -250,13 +247,11 @@ func Radiko_get_url(station string) (string, error) {
 			goto exit_this
 		}
 
+		// update token
 		authtoken = h2.Get("x-radiko-authtoken")
 		offset, _ := strconv.Atoi(h2.Get("x-radiko-keyoffset"))
 		length, _ := strconv.Atoi(h2.Get("x-radiko-keylength"))
 		partialkey := base64.StdEncoding.EncodeToString([]byte(auth_key[offset : offset+length]))
-
-		//~ fmt.Println("authtoken update.")
-		os.WriteFile(tokenfile, []byte(authtoken), 0666)
 
 		url2 := "https://radiko.jp/v2/api/auth2"
 		h3 := make(http.Header)
