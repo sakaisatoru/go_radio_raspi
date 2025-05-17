@@ -26,7 +26,7 @@ const (
 	MPV_SOCKET_PATH     string = "/run/user/1001/mpvsocket"
 	WEATHER_WORKING_DIR string = "/run/user/1001/weatherinfo"
 	FORECASTLOCATION    string = "埼玉県和光市"
-	VERSIONMESSAGE      string = "Radio  Ver 1.58"
+	VERSIONMESSAGE      string = "Radio  Ver 1.60"
 )
 
 const (
@@ -320,7 +320,6 @@ func main() {
 	oled.Configure()
 	oled.SetBuffer(VERSIONMESSAGE)
 	oled.PrintBuffer(0)
-	//~ oled.PrintWithPos(0, 0, []byte(VERSIONMESSAGE))
 	defer oled.DisplayOff()
 
 	// rotaryencoder
