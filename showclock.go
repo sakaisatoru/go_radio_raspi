@@ -13,7 +13,7 @@ func showclock() {
 
 	if display_info == display_info_only_doubleheight_clock {
 		n := time.Now()
-		s = fmt.Sprintf("% 2d%c%02d", n.Hour(), display_colon[colon], n.Minute())
+		s = fmt.Sprintf("%2d%c%02d", n.Hour(), display_colon[colon], n.Minute())
 		oled.ShowClockWithUserfont(1, []byte(s))
 		return
 	} else {
