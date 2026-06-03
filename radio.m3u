@@ -5,14 +5,6 @@ mms://hdv.nkansai.tv/smile
 
 #EXTINF:-1,USA / AFN Tokyo
 plugin:/afn.py/AFNP_TKO
-#EXTINF:-1,USA / AFN Iwakuni
-plugin:/afn.py/AFNP_IWA
-#EXTINF:-1,USA / AFN Misawa
-plugin:/afn.py/AFNP_MSW
-#EXTINF:-1,USA / AFN Okinawa
-plugin:/afn.py/AFNP_OKN
-#EXTINF:-1,USA / AFN Sasebo
-plugin:/afn.py/AFNP_SBO
 #EXTINF:-1,USA / AFN Gravity
 plugin:/afn.py/AFN_GRV
 #EXTINF:-1,USA / AFN Hall of Fame
@@ -27,6 +19,17 @@ plugin:/afn.py/AFN04_S01
 plugin:/afn.py/AFN05_S01
 #EXTINF:-1,USA / AFN Country
 plugin:/afn.py/AFN_CTY
+
+#EXTINF:-1,1.FM / Top40
+https://strm112.1.fm/top40_mobile_mp3?aw_0_req.gdpr=true
+#EXTINF:-1,1.FM / Deephouse
+https://strm112.1.fm/deephouse_mobile_mp3?aw_0_req.gdpr=true
+#EXTINF:-1,1.FM / DeepTechno
+https://strm112.1.fm/deeptech_mobile_mp3?aw_0_req.gdpr=true
+#EXTINF:-1,1.FM / ChilloutLounge
+https://strm112.1.fm/chilloutlounge_mobile_mp3?aw_0_req.gdpr=true
+#EXTINF:-1,1.FM / AbsoluteTrance(Euro)
+https://strm112.1.fm/trance_mobile_mp3?aw_0_req.gdpr=true
 
 #EXTINF:-1,klassikradio.de / Klassik Radio Live
 http://live.streams.klassikradio.de/klassikradio-deutschland/stream/mp3
@@ -87,3 +90,5 @@ https://radio-stream.nhk.jp/hls/live/2023501/nhkradiruakr2/master48k.m3u8
 
 #EXTINF:-1,Vocaloid Radio / Vocaloid
 http://curiosity.shoutca.st:8019/stream
+#EXTINF:-1,Clover.fm / JPopsuki
+http://jpopsuki.fm:8000/stream
