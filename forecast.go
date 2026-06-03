@@ -30,11 +30,10 @@ func info_forecast() string {
 	var (
 		label *string
 		fore  *weatherinfo.Forecast
-		rs    string
+		rs    string = "ｹﾞﾝｻﾞｲﾃﾝｷﾖﾎｳﾊｼｭﾄｷﾃﾞｷﾏｾﾝ"
 	)
-	if forecastinfo_enable == false {
-		rs = "ｹﾞﾝｻﾞｲﾃﾝｷﾖﾎｳﾊｼｭﾄｷﾃﾞｷﾏｾﾝ"
-	} else {
+	if forecastinfo_enable {
+		rs = ""
 		switch display_info {
 		case display_info_weather_1:
 			if err := weather_i.GetWeatherInfo((*forecast_area_ul)[foreloc], foreloc); err == nil {
@@ -45,8 +44,7 @@ func info_forecast() string {
 						al[j] = weatherinfo.KanaName[al[j]]
 					}
 					stmp := strings.TrimRight(strings.Join(al, ","), ",")
-					rs = fmt.Sprintf("%s %s\n",
-						weatherinfo.KanaName[weather_i.Warning[i].Label], stmp)
+					rs = rs + stmp + weatherinfo.KanaName[weather_i.Warning[i].Label] + "   "
 				}
 			} else {
 				// 天気予報取得失敗

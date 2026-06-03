@@ -10,6 +10,10 @@ func show_volume() {
 	mu.Lock()
 	defer mu.Unlock()
 
+	if display_info == display_info_only_doubleheight_clock {
+		return
+	}
+
 	s := fmt.Sprintf("vol:%2d", volume)
 	oled.PrintWithPos(0, 1, []byte(s))
 
