@@ -39,6 +39,10 @@ func info_forecast() string {
 			if err := weather_i.GetWeatherInfo((*forecast_area_ul)[foreloc], foreloc); err == nil {
 				// 警報・注意報
 				for i := 0; i < len(weather_i.Warning); i++ {
+					if weather_i.Warning[i].AlarmType == "無し" {
+						rs = weatherinfo.KanaName[weather_i.Warning[i].Label] + " " + weatherinfo.KanaName["無し"]
+						break
+					}
 					al := strings.Split(weather_i.Warning[i].AlarmType, "、")
 					for j := 0; j < len(al); j++ {
 						al[j] = weatherinfo.KanaName[al[j]]
