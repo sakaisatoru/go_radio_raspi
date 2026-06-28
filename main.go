@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 	"github.com/davecheney/i2c"
+	"github.com/sakaisatoru/go_mpvradio/netradio"
 	"github.com/sakaisatoru/weatherinfo"
 	"github.com/stianeikeland/go-rpio/v4"
 	"local.packages/aqm1602y"
 	"local.packages/irremote"
 	"local.packages/mpvctl"
-	"local.packages/netradio"
 	"local.packages/rotaryencoder"
 	"log"
 	"net"
@@ -26,7 +26,7 @@ const (
 	MPV_SOCKET_PATH     string = "/run/user/1001/mpvsocket"
 	WEATHER_WORKING_DIR string = "/run/user/1001/weatherinfo"
 	FORECASTLOCATION    string = "埼玉県和光市"
-	VERSIONMESSAGE      string = "Radio  Ver 1.60"
+	VERSIONMESSAGE      string = "Radio  Ver 1.61"
 )
 
 const (
@@ -289,6 +289,7 @@ func cb_mpvrecv(ms mpvctl.MpvIRC) (string, bool) {
 }
 
 func main() {
+	// GPIO 初期化
 	if err := rpio.Open(); err != nil {
 		infoupdate(0, errmessage[ERROR_RPIO_NOT_OPEN])
 		infoupdate(1, errmessage[ERROR_HUP])
@@ -309,7 +310,7 @@ func main() {
 	rpio.Pin(23).PullUp()
 	rpio.Pin(23).Low() // AF amp disable
 
-	// OLED or LCD
+	// I2C OLED(あるいはLCD) 初期化
 	i2c, err := i2c.New(0x3c, 1)
 	if err != nil {
 		log.Println(err)
@@ -340,8 +341,6 @@ func main() {
 		return
 	}
 	defer irremote.Close()
-	irch := make(chan int32)
-	go irremote.Read(irch)
 
 	// mpv
 	if err := mpvctl.Init(MPV_SOCKET_PATH); err != nil {
@@ -373,7 +372,10 @@ func main() {
 		return
 	}
 	stlen = len(stlist)
-	go netradio.Radiko_setup(stlist)
+
+	// radiko用代理サーバー
+	radikoproxy = netradio.RadikoProxyNew()
+	//~ go netradio.Radiko_setup(stlist)
 
 	// 天気予報取得の準備
 	go setup_forecast(FORECASTLOCATION)
@@ -400,10 +402,13 @@ func main() {
 
 	colonblink := time.NewTicker(500 * time.Millisecond)
 
+	// 入力受付起動
 	btncode := make(chan ButtonCode)
 	go btninput(btncode)
 	rencode := make(chan rotaryencoder.REvector)
 	go rencoder.DetectLoop(rencode)
+	irch := make(chan int32)
+	go irremote.Read(irch)
 
 	// 外部通信用socket
 	recvmessage := make(chan string)
