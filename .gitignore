@@ -1,4 +1,6 @@
 /radio_r
+/go_radio_raspi
+*.bak
 
 ./go_radio_raspi/go_radio_raspi.geany
 /go_radio_raspi.geany

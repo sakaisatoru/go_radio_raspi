@@ -1,11 +1,15 @@
 package main
 
 import (
+	"github.com/sakaisatoru/go_mpvradio/netradio"
 	"github.com/stianeikeland/go-rpio/v4"
 	"local.packages/mpvctl"
-	"local.packages/netradio"
 	"log"
 	"strings"
+)
+
+var (
+	radikoproxy *netradio.RadikoProxy
 )
 
 func tune() {
@@ -22,9 +26,20 @@ func tune() {
 	if args[0] == "plugin:" {
 		switch args[1] {
 		case "afn.py":
-			station_url, err = netradio.AFN_get_url_with_api(args[2])
+			station_url, err = netradio.AFNGetUrlWithApi(args[2])
 		case "radiko.py":
-			station_url, err = netradio.Radiko_get_url(args[2])
+			radiko, e := netradio.RadikoGetUrl(args[2])
+			if e != nil {
+				err = e
+				break
+			}
+			radikoproxy.SetStationInfo(radiko)
+			if radikoproxy.IsStop() {
+				radikoproxy.Start()
+			}
+			station_url = radikoproxy.GetProxyAddress()
+
+			//~ station_url, err = netradio.Radiko_get_url(args[2])
 		default:
 			break
 		}

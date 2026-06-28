@@ -5,20 +5,6 @@ mms://hdv.nkansai.tv/smile
 
 #EXTINF:-1,USA / AFN Tokyo
 plugin:/afn.py/AFNP_TKO
-#EXTINF:-1,USA / AFN Gravity
-plugin:/afn.py/AFN_GRV
-#EXTINF:-1,USA / AFN Hall of Fame
-plugin:/afn.py/AFN01_S01
-#EXTINF:-1,USA / AFN On Stage
-plugin:/afn.py/AFN02_S01
-#EXTINF:-1,USA / AFN The Groove
-plugin:/afn.py/AFN03_S01
-#EXTINF:-1,USA / AFN Mach 5
-plugin:/afn.py/AFN04_S01
-#EXTINF:-1,USA / AFN Jazz+
-plugin:/afn.py/AFN05_S01
-#EXTINF:-1,USA / AFN Country
-plugin:/afn.py/AFN_CTY
 
 #EXTINF:-1,1.FM / Top40
 https://strm112.1.fm/top40_mobile_mp3?aw_0_req.gdpr=true
